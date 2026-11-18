@@ -1,26 +1,66 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* PatchPay — "clerk's office" look: paper, ink, rubber stamps, receipts.
+   No gradients, no glass, no rounded SaaS cards. */
+@theme {
+  --color-paper: #ece7db;
+  --color-paper-2: #e3ddcd;
+  --color-ink: #17150f;
+  --color-ink-2: #4a463b;
+  --color-rule: #b9b19c;
+  --color-bch: #0a8f6a;      /* darker than brand green so it reads as stamp ink */
+  --color-bch-bright: #0ac18e;
+  --color-del: #b3261e;
+  --color-add: #1f6f43;
+  --color-carbon: #2b3a67;   /* carbon-copy blue for signatures/links */
+  --font-serif: var(--font-newsreader), Georgia, serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html { background: var(--color-paper); color: var(--color-ink); }
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-serif);
+  /* faint paper grain */
+  background-image:
+    radial-gradient(rgba(23,21,15,.035) 1px, transparent 1px),
+    radial-gradient(rgba(23,21,15,.025) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 2px;
 }
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.rule { border-color: var(--color-rule); }
+a.ink-link { color: var(--color-carbon); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
+/* Rubber stamp */
+.stamp {
+  display: inline-block; font-family: var(--font-mono); text-transform: uppercase; font-weight: 700;
+  letter-spacing: .12em; padding: .25rem .6rem; border: 3px double currentColor; transform: rotate(-5deg);
+  opacity: .88; mix-blend-mode: multiply;
+  -webkit-mask-image: radial-gradient(circle at 30% 40%, #000 60%, rgba(0,0,0,.75) 61%, #000 75%);
+}
+
+/* Receipt with torn/perforated bottom edge */
+.receipt {
+  background: #f7f4ec; position: relative; padding: 1.5rem 1.5rem 2rem;
+  box-shadow: 0 1px 0 var(--color-rule), 0 12px 24px -18px rgba(23,21,15,.5);
+}
+.receipt::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px;
+  background: radial-gradient(circle at 6px -2px, transparent 7px, #f7f4ec 7.5px) 0 0 / 12px 10px repeat-x;
+}
+
+/* Typewriter-ish primary button */
+.btn {
+  font-family: var(--font-mono); font-size: .85rem; text-transform: uppercase; letter-spacing: .08em;
+  border: 1.5px solid var(--color-ink); padding: .55rem 1rem; background: transparent; cursor: pointer;
+  box-shadow: 3px 3px 0 var(--color-ink); transition: transform .08s, box-shadow .08s;
+}
+.btn:hover { transform: translate(1px,1px); box-shadow: 2px 2px 0 var(--color-ink); }
+.btn:active { transform: translate(3px,3px); box-shadow: 0 0 0 var(--color-ink); }
+.btn-ink { background: var(--color-ink); color: var(--color-paper); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.field { font-family: var(--font-mono); background: #f7f4ec; border: 1px solid var(--color-rule); border-bottom: 2px solid var(--color-ink); padding: .5rem .65rem; width: 100%; }
+.field:focus { outline: 2px solid var(--color-carbon); outline-offset: 1px; }
+.label { font-family: var(--font-mono); font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: var(--color-ink-2); }

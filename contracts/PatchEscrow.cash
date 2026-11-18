@@ -1,0 +1,39 @@
+pragma cashscript ^0.14.0;
+
+// PatchEscrow — one contract address per bounty.
+// The maintainer funds it from any wallet (via WizardConnect).
+// Funds can only ever go to:
+//   (a) the contributor the PatchPay oracle signed for, after the PR is merged
+//       and PatchProof verification passed, or
+//   (b) back to the maintainer after the deadline (anyone can trigger it).
+// No user signature is needed inside the contract, which keeps it compatible
+// with WizardConnect (WizardConnect cannot fill contract signature arguments).
+contract PatchEscrow(
+    bytes32 bountyId,       // sha256 of the PatchPay bounty UUID
+    pubkey oraclePk,        // PatchPay verifier/oracle public key
+    bytes maintainerLock,   // maintainer's P2PKH locking bytecode (refund target)
+    int deadline            // unix timestamp; refund allowed after this
+) {
+    // Release to the contributor named in an oracle-signed message.
+    // message = bountyId ++ recipientLock ++ proofHash
+    function release(datasig oracleSig, bytes recipientLock, bytes32 proofHash) {
+        require(tx.inputs.length == 1);
+        require(checkDataSig(oracleSig, bountyId + recipientLock + proofHash, oraclePk));
+        require(tx.outputs[0].lockingBytecode == recipientLock);
+        require(tx.outputs[0].tokenCategory == 0x);
+        // fee budget of at most 3000 sats
+        require(tx.outputs[0].value >= tx.inputs[this.activeInputIndex].value - 3000);
+        // output 1 must be an OP_RETURN that publishes the PatchProof hash on-chain
+        require(tx.outputs[1].lockingBytecode == new LockingBytecodeNullData([0x50505046, proofHash]));
+        require(tx.outputs.length == 2);
+    }
+
+    // After the deadline, anyone can push the funds back to the maintainer.
+    function refund() {
+        require(tx.inputs.length == 1);
+        require(tx.time >= deadline);
+        require(tx.outputs[0].lockingBytecode == maintainerLock);
+        require(tx.outputs[0].value >= tx.inputs[this.activeInputIndex].value - 3000);
+        require(tx.outputs.length == 1);
+    }
+}

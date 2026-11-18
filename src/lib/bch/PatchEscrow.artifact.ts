@@ -1,0 +1,52 @@
+export default {
+  contractName: 'PatchEscrow',
+  constructorInputs: [
+    { name: 'bountyId', type: 'bytes32' },
+    { name: 'oraclePk', type: 'pubkey' },
+    { name: 'maintainerLock', type: 'bytes' },
+    { name: 'deadline', type: 'int' },
+  ],
+  abi: [
+    {
+      name: 'release',
+      inputs: [
+        { name: 'oracleSig', type: 'datasig' },
+        { name: 'recipientLock', type: 'bytes' },
+        { name: 'proofHash', type: 'bytes32' },
+      ],
+    },
+    { name: 'refund', inputs: [] },
+  ],
+  bytecode: 'OP_4 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_7 OP_ROLL OP_SIZE 20 OP_EQUALVERIFY OP_TXINPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_6 OP_ROLL OP_ROT OP_7 OP_PICK OP_CAT OP_2 OP_PICK OP_CAT OP_3 OP_ROLL OP_CHECKDATASIGVERIFY OP_0 OP_OUTPUTBYTECODE OP_5 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE OP_INPUTINDEX OP_UTXOVALUE b80b OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_1 OP_OUTPUTBYTECODE 6a 0450505046 OP_CAT 20 OP_3 OP_ROLL OP_CAT OP_CAT OP_EQUALVERIFY OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUAL OP_NIP OP_NIP OP_NIP OP_ELSE OP_4 OP_ROLL OP_1 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_3 OP_ROLL OP_CHECKLOCKTIMEVERIFY OP_DROP OP_0 OP_OUTPUTBYTECODE OP_3 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE OP_INPUTINDEX OP_UTXOVALUE b80b OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUAL OP_NIP OP_NIP OP_ENDIF',
+  source: 'pragma cashscript ^0.14.0;\n\n// PatchEscrow — one contract address per bounty.\n// The maintainer funds it from any wallet (via WizardConnect).\n// Funds can only ever go to:\n//   (a) the contributor the PatchPay oracle signed for, after the PR is merged\n//       and PatchProof verification passed, or\n//   (b) back to the maintainer after the deadline (anyone can trigger it).\n// No user signature is needed inside the contract, which keeps it compatible\n// with WizardConnect (WizardConnect cannot fill contract signature arguments).\ncontract PatchEscrow(\n    bytes32 bountyId,       // sha256 of the PatchPay bounty UUID\n    pubkey oraclePk,        // PatchPay verifier/oracle public key\n    bytes maintainerLock,   // maintainer\'s P2PKH locking bytecode (refund target)\n    int deadline            // unix timestamp; refund allowed after this\n) {\n    // Release to the contributor named in an oracle-signed message.\n    // message = bountyId ++ recipientLock ++ proofHash\n    function release(datasig oracleSig, bytes recipientLock, bytes32 proofHash) {\n        require(tx.inputs.length == 1);\n        require(checkDataSig(oracleSig, bountyId + recipientLock + proofHash, oraclePk));\n        require(tx.outputs[0].lockingBytecode == recipientLock);\n        require(tx.outputs[0].tokenCategory == 0x);\n        // fee budget of at most 3000 sats\n        require(tx.outputs[0].value >= tx.inputs[this.activeInputIndex].value - 3000);\n        // output 1 must be an OP_RETURN that publishes the PatchProof hash on-chain\n        require(tx.outputs[1].lockingBytecode == new LockingBytecodeNullData([0x50505046, proofHash]));\n        require(tx.outputs.length == 2);\n    }\n\n    // After the deadline, anyone can push the funds back to the maintainer.\n    function refund() {\n        require(tx.inputs.length == 1);\n        require(tx.time >= deadline);\n        require(tx.outputs[0].lockingBytecode == maintainerLock);\n        require(tx.outputs[0].value >= tx.inputs[this.activeInputIndex].value - 3000);\n        require(tx.outputs.length == 1);\n    }\n}\n',
+  fingerprint: '8326f09ab2acc7e322e82dc8c352de3a471d9910db5f400cd130aaed00d9ba73',
+  debug: {
+    bytecode: '5479009c63577a82012088c3519d567a7b57797e52797e537abb00cd557a8800d1008800ccc0c602b80b94a26951cd016a0504505050467e0120537a7e7e88c4529c77777767547a519dc3519d537ab17500cd537a8800ccc0c602b80b94a269c4519c777768',
+    sourceMap: '19:4:29:5;;;;;:61:19:78;;;;;20:16:20:32;:36::37;:8::39:1;21:29:21:38:0;;:40::48;:51::64;;:40:::1;:67::76:0;;:40:::1;:78::86:0;;:8::89:1;22:27:22:28:0;:16::45:1;:49::62:0;;:8::64:1;23:27:23:28:0;:16::43:1;:47::49:0;:8::51:1;25:27:25:28:0;:16::35:1;:49::70:0;:39::77:1;:80::84:0;:39:::1;:16;:8::86;27:27:27:28:0;:16::45:1;:49::101:0;:78::88;::::1;:90::99:0;;;::::1;;:8::103;28:16:28:33:0;:37::38;:8::40:1;19:80:29:5;;;:4;32::38::0;;;;33:16:33:32;:36::37;:8::39:1;34:27:34:35:0;;:8::37:1;;35:27:35:28:0;:16::45:1;:49::63:0;;:8::65:1;36:27:36:28:0;:16::35:1;:49::70:0;:39::77:1;:80::84:0;:39:::1;:16;:8::86;37:16:37:33:0;:37::38;:8::40:1;32:22:38:5;;11:0:39:1',
+    logs: [],
+    requires: [
+      { ip: 16, line: 20 },
+      { ip: 28, line: 21 },
+      { ip: 33, line: 22 },
+      { ip: 37, line: 23 },
+      { ip: 45, line: 25 },
+      { ip: 56, line: 27 },
+      { ip: 60, line: 28 },
+      { ip: 70, line: 33 },
+      { ip: 73, line: 34 },
+      { ip: 79, line: 35 },
+      { ip: 87, line: 36 },
+      { ip: 91, line: 37 },
+    ],
+    sourceTags: '5:9:pv;56:58:sc;87:88:sc',
+  },
+  compiler: {
+    name: 'cashc',
+    version: '0.14.0',
+    options: {
+      enforceFunctionParameterTypes: true,
+      enforceLocktimeGuard: true,
+    },
+  },
+  updatedAt: '2026-11-18T04:56:53.229Z',
+} as const;
