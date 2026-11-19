@@ -3,15 +3,33 @@ import { useApp } from './Providers';
 import { walletReceiveAddress } from '@/lib/bch/funding';
 
 export function ConnectBar() {
-  const { wc, openQr, sb, login } = useApp();
+  const { wc, openQr, sb, login, setDemoLogin } = useApp();
   const addr = wc.manager && wc.state === 'connected' ? walletReceiveAddress(wc.manager) : null;
   return (
     <span className="flex gap-3 items-center">
       {login ? (
-        <button className="ink-link" onClick={() => sb.auth.signOut()}>@{login}</button>
+        <button
+          className="ink-link"
+          onClick={() => {
+            if (sb) sb.auth.signOut();
+            else setDemoLogin(null);
+          }}
+          title="Click to sign out"
+        >
+          @{login}
+        </button>
       ) : (
-        <button className="ink-link" onClick={() => sb.auth.signInWithOAuth({ provider: 'github', options: { redirectTo: window.location.href } })}>
-          sign in with github
+        <button
+          className="ink-link"
+          onClick={() => {
+            if (sb) {
+              sb.auth.signInWithOAuth({ provider: 'github', options: { redirectTo: window.location.href } });
+            } else {
+              setDemoLogin('demo-maintainer');
+            }
+          }}
+        >
+          {sb ? 'sign in with github' : 'sign in (demo)'}
         </button>
       )}
       {addr ? (
