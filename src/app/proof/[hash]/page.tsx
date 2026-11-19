@@ -1,4 +1,5 @@
 import { connection } from 'next/server';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db/supabase';
 import { canonicalJson, proofHash, type PatchProof } from '@/lib/patchproof/proof';
@@ -21,7 +22,7 @@ export default async function ProofPage({ params }: { params: Promise<{ hash: st
         <p className="label">PatchProof · v{proof.v}</p>
         <h1 className="text-3xl font-medium mt-1">{proof.bounty.repo}#{proof.bounty.issue} → PR #{proof.patch.pr}</h1>
         <div className="mono text-[13px] mt-5 grid grid-cols-[10rem_1fr] gap-y-1">
-          <span>contributor</span><span>@{proof.contributor.github} ({proof.contributor.kind})</span>
+          <span>contributor</span><span><Link href={`/u/${proof.contributor.github}`} className="ink-link">@{proof.contributor.github}</Link> ({proof.contributor.kind})</span>
           <span>merged by</span><span>@{proof.patch.mergedBy ?? '—'}</span>
           <span>head sha</span><span className="break-all">{proof.patch.headSha}</span>
           <span>diff sha256</span><span className="break-all">{proof.patch.diffSha256}</span>
