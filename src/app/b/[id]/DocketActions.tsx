@@ -5,29 +5,49 @@ import { useApp } from '@/components/Providers';
 import { fundEscrow } from '@/lib/bch/funding';
 
 type Props =
-  | { kind: 'approve'; bountyId: string; proofId: string; disabled: boolean }
+  | { kind: 'approve'; bountyId: string; proofId: string; disabled: boolean; paid: boolean }
   | { kind: 'sync'; bountyId: string; escrow: string; amountSats: number; status: string; pastDeadline: boolean };
 
 export function DocketActions(props: Props) {
   const { authFetch, wc, openQr } = useApp();
   const router = useRouter();
   const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const call = async (url: string, label: string) => {
+    setBusy(true);
     setMsg(label);
-    const r = await authFetch(url, { method: 'POST' });
-    const j = await r.json();
-    setMsg(r.ok ? 'Done.' : j.error ?? 'Failed');
-    router.refresh();
+    try {
+      const r = await authFetch(url, { method: 'POST' });
+      const j = await r.json().catch(() => ({}));
+      setMsg(r.ok ? 'Done.' : typeof j.error === 'string' ? j.error : 'Something went wrong. Please try again.');
+      router.refresh();
+    } catch {
+      setMsg('Network error — check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (props.kind === 'approve') {
     return (
-      <div className="mt-3">
-        <button className="btn btn-ink !text-[11px]" disabled={props.disabled} onClick={() => call(`/api/proofs/${props.proofId}/approve`, 'Signing release & broadcasting…')}>
-          Approve &amp; pay in BCH
+      <div className="mt-3 flex flex-wrap gap-2 items-center">
+        <button
+          className="btn btn-ink !text-[11px]"
+          disabled={props.disabled || busy}
+          onClick={() => call(`/api/proofs/${props.proofId}/approve`, 'Signing release & broadcasting…')}
+        >
+          {busy ? 'Working…' : 'Approve & pay in BCH'}
         </button>
-        {msg && <span className="mono text-xs ml-3">{msg}</span>}
+        <button
+          className="btn !text-[11px]"
+          disabled={busy || props.paid}
+          title="Re-read the PR from GitHub and rebuild the proof (e.g. after CI turned green)"
+          onClick={() => call(`/api/proofs/${props.proofId}/refresh`, 'Refreshing proof from GitHub…')}
+        >
+          Refresh proof
+        </button>
+        {msg && <span className="mono text-xs ml-1">{msg}</span>}
       </div>
     );
   }
@@ -37,15 +57,17 @@ export function DocketActions(props: Props) {
     <div className="flex flex-wrap gap-3 items-center">
       {props.status === 'awaiting_funds' && (
         wc.manager && wc.state === 'connected' ? (
-          <button className="btn btn-ink" onClick={async () => {
+          <button className="btn btn-ink" disabled={busy} onClick={async () => {
+            setBusy(true);
             try { setMsg('Approve in your wallet…'); await fundEscrow(wc.manager!, props.escrow, BigInt(props.amountSats)); await call(`/api/bounties/${props.bountyId}/sync`, 'Checking chain…'); }
-            catch (e) { setMsg((e as Error).message); }
-          }}>Fund escrow</button>
+            catch (e) { setMsg((e as Error).message || 'Funding was cancelled or failed.'); }
+            finally { setBusy(false); }
+          }}>{busy ? 'Waiting…' : 'Fund escrow'}</button>
         ) : <button className="btn" onClick={openQr}>Connect wallet to fund</button>
       )}
-      <button className="btn !text-[11px]" onClick={() => call(`/api/bounties/${props.bountyId}/sync`, 'Reading chain…')}>Re-check chain</button>
+      <button className="btn !text-[11px]" disabled={busy} onClick={() => call(`/api/bounties/${props.bountyId}/sync`, 'Reading chain…')}>Re-check chain</button>
       {pastDeadline && !['paid', 'refunded'].includes(props.status) && (
-        <button className="btn !text-[11px]" onClick={() => call(`/api/bounties/${props.bountyId}/refund`, 'Refunding…')}>Trigger refund</button>
+        <button className="btn !text-[11px]" disabled={busy} onClick={() => call(`/api/bounties/${props.bountyId}/refund`, 'Refunding…')}>Trigger refund</button>
       )}
       {msg && <p className="mono text-xs w-full">{msg}</p>}
     </div>
