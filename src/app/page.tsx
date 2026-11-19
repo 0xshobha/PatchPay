@@ -62,7 +62,8 @@ export default async function Home() {
         {rows.length === 0 ? (
           <p className="py-10 mono text-sm text-ink-2">No funded bounties yet. The first entry could be yours.</p>
         ) : (
-          <table className="w-full mono text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full mono text-sm min-w-[22rem]">
             <thead className="text-ink-2 text-[11px] uppercase tracking-widest">
               <tr><th className="text-left py-2">Docket</th><th className="text-left">Issue</th><th className="text-right">BCH</th><th className="text-right">Status</th></tr>
             </thead>
@@ -77,6 +78,7 @@ export default async function Home() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
     </>
