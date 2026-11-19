@@ -6,9 +6,10 @@ import { createClient, type Session, type SupabaseClient } from '@supabase/supab
 type Ctx = {
   wc: UseWizardConnectResult;
   openQr: () => void;
-  sb: SupabaseClient;
+  sb: SupabaseClient | null;
   session: Session | null;
   login: string | null;
+  setDemoLogin: (login: string | null) => void;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
 };
 const AppCtx = createContext<Ctx | null>(null);
@@ -21,23 +22,57 @@ export const useApp = () => {
 export function Providers({ children }: { children: React.ReactNode }) {
   const wc = useWizardConnect({ dappName: 'PatchPay', dappIcon: '/icon.png' });
   const [show, setShow] = useState(false);
-  const sb = useMemo(() => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!), []);
+  const [demoLogin, setDemoLoginState] = useState<string | null>(null);
+
+  const sb = useMemo(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anon) return null;
+    return createClient(url, anon);
+  }, []);
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    sb.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => data.subscription.unsubscribe();
+    if (sb) {
+      sb.auth.getSession().then(({ data }) => setSession(data?.session ?? null));
+      const { data } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
+      return () => data.subscription.unsubscribe();
+    } else if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('patchpay_demo_login');
+      // Sync the demo login from localStorage once, after mount (avoids a hydration mismatch).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDemoLoginState(saved ?? 'demo-maintainer'); // default signed in for instant local testing!
+    }
   }, [sb]);
 
-  const login = (session?.user.user_metadata as { user_name?: string } | undefined)?.user_name ?? null;
+  const setDemoLogin = (l: string | null) => {
+    setDemoLoginState(l);
+    if (typeof window !== 'undefined') {
+      if (l) localStorage.setItem('patchpay_demo_login', l);
+      else localStorage.removeItem('patchpay_demo_login');
+    }
+  };
+
+  const login = (session?.user.user_metadata as { user_name?: string } | undefined)?.user_name ?? demoLogin ?? null;
+
   const authFetch = (url: string, init: RequestInit = {}) =>
-    fetch(url, { ...init, headers: { 'content-type': 'application/json', ...(init.headers ?? {}), ...(session ? { authorization: `Bearer ${session.access_token}` } : {}) } });
+    fetch(url, {
+      ...init,
+      headers: {
+        'content-type': 'application/json',
+        ...(init.headers ?? {}),
+        ...(session
+          ? { authorization: `Bearer ${session.access_token}` }
+          : login
+          ? { authorization: `Bearer demo-${login}` }
+          : {}),
+      },
+    });
 
   const openQr = () => { wc.connect(); setShow(true); };
 
   return (
-    <AppCtx.Provider value={{ wc, openQr, sb, session, login, authFetch }}>
+    <AppCtx.Provider value={{ wc, openQr, sb, session, login, setDemoLogin, authFetch }}>
       {children}
       {wc.uri && wc.qrUri && (
         <WizardConnectQRDialog
