@@ -21,12 +21,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen">
         <Providers>
           <BlazeBanner />
-          <header className="mx-auto max-w-5xl px-5 pt-6 pb-4 flex items-end justify-between border-b-2 border-ink">
+          <header className="mx-auto max-w-5xl px-5 pt-6 pb-4 flex flex-wrap gap-y-2 items-end justify-between border-b-2 border-ink">
             <Link href="/" className="leading-none">
               <span className="text-3xl font-semibold tracking-tight">PatchPay</span>
-              <span className="mono text-xs ml-2 text-ink-2">office of paid patches</span>
+              <span className="mono text-xs ml-2 text-ink-2 hidden sm:inline">office of paid patches</span>
             </Link>
-            <nav className="mono text-sm flex gap-5 items-center">
+            <nav className="mono text-sm flex flex-wrap gap-x-5 gap-y-2 items-center">
               <Link href="/new" className="ink-link">post a bounty</Link>
               <Link href="/how" className="ink-link">how it works</Link>
               <ConnectBar />
