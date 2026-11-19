@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/db/supabase';
 import { EXPLORER_TX } from '@/lib/bch/network';
 import { DocketActions } from './DocketActions';
+import { EscrowLive } from './EscrowLive';
+import { CopyButton } from '@/components/CopyButton';
 
 const STAMP: Record<string, { text: string; cls: string }> = {
   awaiting_funds: { text: 'unfunded', cls: 'text-del' },
@@ -42,9 +44,15 @@ export default async function Docket({ params }: { params: Promise<{ id: string 
         </div>
 
         <div className="mt-8 receipt mono text-xs">
-          <p className="label">How to claim</p>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="label">How to claim</p>
+            <CopyButton
+              label="Copy PR body lines"
+              text={`Fixes #${b.issue_number}\nPatchPay-Address: ${b.network === 'mainnet' ? 'bitcoincash:' : 'bchtest:'}q…your address`}
+            />
+          </div>
           <p className="mt-2">Open a PR that says <b>Fixes #{b.issue_number}</b> and add this line to the PR body:</p>
-          <pre className="mt-2 bg-paper-2 p-2 select-all">PatchPay-Address: {b.network === 'mainnet' ? 'bitcoincash:' : 'bchtest:'}q…your address</pre>
+          <pre className="mt-2 bg-paper-2 p-2 select-all whitespace-pre-wrap break-all">PatchPay-Address: {b.network === 'mainnet' ? 'bitcoincash:' : 'bchtest:'}q…your address</pre>
           <p className="mt-2">Coding agent? Also add <b>PatchPay-Agent: true</b>. Agents and humans are paid the same way.</p>
         </div>
 
@@ -53,14 +61,14 @@ export default async function Docket({ params }: { params: Promise<{ id: string 
         {(proofs ?? []).map((p) => (
           <div key={p.id} className="border-b rule py-4 mono text-sm">
             <div className="flex justify-between">
-              <span>PR #{p.pr_number} by @{p.proof.contributor.github} {p.proof.contributor.kind === 'agent' && <span className="text-carbon">[agent]</span>}</span>
+              <span>PR #{p.pr_number} by <Link href={`/u/${p.proof.contributor.github}`} className="ink-link">@{p.proof.contributor.github}</Link> {p.proof.contributor.kind === 'agent' && <span className="text-carbon">[agent]</span>}</span>
               <Link href={`/proof/${p.proof_hash}`} className="ink-link">{p.proof_hash.slice(0, 12)}…</Link>
             </div>
             <div className="text-xs text-ink-2 mt-1">
               checks {p.checks_green ? 'green' : 'NOT green'} · AI review {p.proof.review.score}/100 · +{p.proof.patch.additions}/−{p.proof.patch.deletions} · {p.status}
             </div>
             {p.proof.review.slopSignals?.length > 0 && <div className="text-xs text-del mt-1">slop signals: {p.proof.review.slopSignals.join('; ')}</div>}
-            <DocketActions kind="approve" bountyId={b.id} proofId={p.id} disabled={p.status !== 'pending' || !p.checks_green} />
+            <DocketActions kind="approve" bountyId={b.id} proofId={p.id} disabled={p.status !== 'pending' || !p.checks_green} paid={p.status === 'paid'} />
           </div>
         ))}
       </div>
@@ -70,7 +78,9 @@ export default async function Docket({ params }: { params: Promise<{ id: string 
           <div className="flex justify-between"><span>ESCROW</span><span>{(Number(b.amount_sats) / 1e8).toFixed(5)} BCH</span></div>
           <div className="border-t border-dashed rule my-2" />
           <p className="break-all text-xs select-all">{b.escrow_address}</p>
-          <p className="text-xs mt-2">refunds to maintainer after {deadline.toISOString().slice(0, 10)}</p>
+          <EscrowLive bountyId={b.id} escrow={b.escrow_address} amountSats={Number(b.amount_sats)} funded={b.status !== 'awaiting_funds'} />
+          <div className="border-t border-dashed rule my-2" />
+          <p className="text-xs">refunds to maintainer after {deadline.toISOString().slice(0, 10)}</p>
           <p className="text-xs mt-1 text-ink-2 break-all">oracle {b.oracle_pubkey.slice(0, 18)}…</p>
           <span className={`stamp absolute right-4 -bottom-2 ${stamp.cls}`}>{stamp.text}</span>
         </div>
