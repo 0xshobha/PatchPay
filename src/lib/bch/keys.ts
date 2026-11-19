@@ -27,5 +27,17 @@ export function isValidAddress(address: string) {
   return typeof d !== 'string' && d.prefix === ADDRESS_PREFIX;
 }
 
+/** Re-encode any p2pkh cashaddr as its token-aware (p2pkhWithTokens) form. */
+export function toTokenAddress(address: string): string {
+  const d = decodeCashAddress(address);
+  if (typeof d === 'string') throw new Error(`Invalid BCH address: ${d}`);
+  const res = encodeCashAddress({
+    prefix: d.prefix as 'bitcoincash' | 'bchtest',
+    type: 'p2pkhWithTokens',
+    payload: d.payload,
+  });
+  return res.address;
+}
+
 /** bytes32 bounty id used inside the contract = sha256(uuid) */
 export const bountyIdBytes = (uuid: string) => sha256.hash(utf8ToBin(uuid));
