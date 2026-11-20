@@ -9,6 +9,9 @@ import { isValidAddress } from '@/lib/bch/keys';
 import { NETWORK } from '@/lib/bch/network';
 import { githubConfigured, githubErrorMessage, isDemoMode } from '@/lib/mode';
 
+// GitHub maintainer check.
+export const maxDuration = 30;
+
 const Body = z.object({
   owner: z.string().min(1),
   repo: z.string().min(1),

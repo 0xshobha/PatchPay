@@ -4,6 +4,9 @@ import { db, logEvent } from '@/lib/db/supabase';
 import { refundEscrow } from '@/lib/bch/escrow';
 import { isDemoMode } from '@/lib/mode';
 
+// on-chain refund broadcast.
+export const maxDuration = 60;
+
 /** Permissionless: after the deadline anyone may trigger it; the contract only pays the maintainer. */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;

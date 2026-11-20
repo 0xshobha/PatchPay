@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Google AI Studio key (free tier available): https://aistudio.google.com/apikey
 const MODEL = process.env.GEMINI_MODEL ?? 'gemini-flash-lite-latest';
-const TIMEOUT_MS = 45_000;
+const TIMEOUT_MS = 30_000; // 3 attempts + backoff stay inside a 120 s maxDuration
 const ATTEMPTS = 3;
 
 async function callGemini(prompt: string): Promise<string> {

@@ -12,11 +12,25 @@ const toBch = (sats: number | bigint) => (Number(sats) / 1e8).toFixed(5);
  *  - renders a QR code of the escrow address (ink on paper) so anyone can top it
  *    up from any BCH wallet.
  */
-export function EscrowLive({ bountyId, escrow, amountSats, funded }: { bountyId: string; escrow: string; amountSats: number; funded: boolean }) {
+type SyncResult = { totalSats?: string; funded?: boolean; backers?: number };
+
+export function EscrowLive({ bountyId, escrow, amountSats, funded, backers: initialBackers }: { bountyId: string; escrow: string; amountSats: number; funded: boolean; backers: number }) {
   const router = useRouter();
   const [qr, setQr] = useState<string | null>(null);
   const [live, setLive] = useState<{ totalSats: string; funded: boolean } | null>(null);
+  const [backers, setBackers] = useState(initialBackers);
   const [state, setState] = useState<'loading' | 'done' | 'offline'>('loading');
+
+  // Another component (BackBounty) just synced: take its result.
+  useEffect(() => {
+    const onSynced = (e: Event) => {
+      const j = (e as CustomEvent<SyncResult>).detail;
+      if (j?.totalSats != null) { setLive({ totalSats: String(j.totalSats), funded: Boolean(j.funded) }); setState('done'); }
+      if (typeof j?.backers === 'number') setBackers(j.backers);
+    };
+    window.addEventListener('patchpay:synced', onSynced);
+    return () => window.removeEventListener('patchpay:synced', onSynced);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +52,7 @@ export function EscrowLive({ bountyId, escrow, amountSats, funded }: { bountyId:
         if (cancelled) return;
         if (r.ok) {
           setLive({ totalSats: String(j.totalSats ?? '0'), funded: Boolean(j.funded) });
+          if (typeof j.backers === 'number') setBackers(j.backers);
           setState('done');
           // If funding status just flipped, refresh the server component once.
           if (Boolean(j.funded) !== funded) router.refresh();
@@ -61,6 +76,10 @@ export function EscrowLive({ bountyId, escrow, amountSats, funded }: { bountyId:
           {state === 'done' && live && <>{toBch(Number(live.totalSats))} BCH{Number(live.totalSats) >= amountSats ? '' : ' (under target)'}</>}
           {state === 'offline' && <span className="text-ink-2">chain offline</span>}
         </span>
+      </div>
+      <div className="flex justify-between items-baseline">
+        <span>BACKERS</span>
+        <span className="font-bold">{backers}</span>
       </div>
 
       {qr && (

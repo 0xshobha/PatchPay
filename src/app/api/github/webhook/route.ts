@@ -1,4 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
+
+// Room for GitHub API + Gemini review + PR comment, which run after the 202 is sent.
+export const maxDuration = 120;
 import { githubApp } from '@/lib/github/app';
 import { buildPatchProof, commentOnPr } from '@/lib/github/verify';
 import { proofHash, checksAllGreen, type PatchProof } from '@/lib/patchproof/proof';
@@ -24,19 +27,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'bad payload' }, { status: 400 });
   }
 
-  try {
-    return await handle(event, payload);
-  } catch (e) {
-    const message = (e as Error).message ?? 'unknown webhook error';
-    // Swallow the error and acknowledge with 200 so GitHub does not retry forever.
+  // GitHub gives up on a delivery after 10 s, but building a PatchProof (GitHub API +
+  // Gemini review + PR comment) can take longer. Acknowledge now, work after the response.
+  after(async () => {
     try {
-      await db().from('events').insert({ actor: 'webhook', action: 'webhook.error', data: { event, message } });
-    } catch (logErr) {
-      console.warn('Could not record webhook.error event:', logErr);
+      const res = await handle(event, payload);
+      if (res.status >= 400) console.warn('Webhook handled with status', res.status);
+    } catch (e) {
+      const message = (e as Error).message ?? 'unknown webhook error';
+      try {
+        await db().from('events').insert({ actor: 'webhook', action: 'webhook.error', data: { event, message } });
+      } catch (logErr) {
+        console.warn('Could not record webhook.error event:', logErr);
+      }
+      console.error('Webhook handler error:', e);
     }
-    console.error('Webhook handler error:', e);
-    return NextResponse.json({ ok: false, error: message });
-  }
+  });
+  return NextResponse.json({ ok: true, accepted: event }, { status: 202 });
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

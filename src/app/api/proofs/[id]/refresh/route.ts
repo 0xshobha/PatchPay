@@ -5,6 +5,9 @@ import { isMaintainer } from '@/lib/github/app';
 import { rebuildProof } from '@/lib/patchproof/rebuild';
 import { githubConfigured, githubErrorMessage } from '@/lib/mode';
 
+// GitHub API + Gemini PR review.
+export const maxDuration = 120;
+
 /**
  * Maintainer-only: re-read the PR from GitHub and rebuild the PatchProof on demand.
  * Useful when CI turned green only after the merge webhook already ran.

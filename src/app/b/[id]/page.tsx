@@ -6,6 +6,9 @@ import { EXPLORER_TX } from '@/lib/bch/network';
 import { DocketActions } from './DocketActions';
 import { EscrowLive } from './EscrowLive';
 import { CopyButton } from '@/components/CopyButton';
+import { BackBounty } from './BackBounty';
+
+const BACKABLE = ['open', 'in_review', 'verified'];
 
 const STAMP: Record<string, { text: string; cls: string }> = {
   awaiting_funds: { text: 'unfunded', cls: 'text-del' },
@@ -29,6 +32,7 @@ export default async function Docket({ params }: { params: Promise<{ id: string 
   ]);
   if (!b) notFound();
   const stamp = STAMP[b.status] ?? { text: b.status, cls: '' };
+  const backers = new Set((pays ?? []).filter((p) => p.kind === 'fund').map((p) => p.txid)).size;
   const deadline = new Date(Number(b.deadline_unix) * 1000);
 
   return (
@@ -78,18 +82,22 @@ export default async function Docket({ params }: { params: Promise<{ id: string 
           <div className="flex justify-between"><span>ESCROW</span><span>{(Number(b.amount_sats) / 1e8).toFixed(5)} BCH</span></div>
           <div className="border-t border-dashed rule my-2" />
           <p className="break-all text-xs select-all">{b.escrow_address}</p>
-          <EscrowLive bountyId={b.id} escrow={b.escrow_address} amountSats={Number(b.amount_sats)} funded={b.status !== 'awaiting_funds'} />
+          <EscrowLive bountyId={b.id} escrow={b.escrow_address} amountSats={Number(b.amount_sats)} funded={b.status !== 'awaiting_funds'} backers={backers} />
           <div className="border-t border-dashed rule my-2" />
           <p className="text-xs">refunds to maintainer after {deadline.toISOString().slice(0, 10)}</p>
           <p className="text-xs mt-1 text-ink-2 break-all">oracle {b.oracle_pubkey.slice(0, 18)}…</p>
           <span className={`stamp absolute right-4 -bottom-2 ${stamp.cls}`}>{stamp.text}</span>
         </div>
+        {BACKABLE.includes(b.status) && <BackBounty bountyId={b.id} escrow={b.escrow_address} />}
         <DocketActions kind="sync" bountyId={b.id} escrow={b.escrow_address} amountSats={Number(b.amount_sats)} status={b.status} pastDeadline={isPast(Number(b.deadline_unix))} />
 
         <div>
           <p className="label mb-2">Transactions</p>
+          {(pays ?? []).length === 0 && <p className="mono text-xs text-ink-2">None yet.</p>}
           {(pays ?? []).map((t) => (
-            <a key={t.id} href={EXPLORER_TX(t.txid)} className="block mono text-xs ink-link">{t.kind} · {t.txid.slice(0, 16)}…</a>
+            <a key={t.id} href={EXPLORER_TX(t.txid)} className="block mono text-xs ink-link">
+              {t.kind === 'fund' ? 'backed' : t.kind}{t.amount_sats ? ` ${(Number(t.amount_sats) / 1e8).toFixed(5)}` : ''} · {t.txid.slice(0, 12)}…
+            </a>
           ))}
         </div>
         <div>

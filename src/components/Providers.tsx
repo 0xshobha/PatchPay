@@ -20,7 +20,8 @@ export const useApp = () => {
 };
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const wc = useWizardConnect({ dappName: 'PatchPay', dappIcon: '/icon.png' });
+  // The wallet fetches this icon itself, so it must be an absolute URL.
+  const wc = useWizardConnect({ dappName: 'PatchPay', dappIcon: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/icon.png` });
   const [show, setShow] = useState(false);
   const [demoLogin, setDemoLoginState] = useState<string | null>(null);
 

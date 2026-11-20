@@ -12,6 +12,9 @@ import { EXPLORER_TX } from '@/lib/bch/network';
 import type { PatchProof } from '@/lib/patchproof/proof';
 import { githubConfigured, githubErrorMessage, isDemoMode } from '@/lib/mode';
 
+// GitHub re-check + on-chain release broadcast (+ optional NFT receipt).
+export const maxDuration = 60;
+
 // The ONLY path that moves money. Requires: human maintainer + merged PR + green checks + valid address.
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;

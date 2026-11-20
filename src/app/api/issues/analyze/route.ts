@@ -5,6 +5,9 @@ import { scoutIssue } from '@/lib/ai/gemini';
 import { githubLoginFromRequest } from '@/lib/auth';
 import { githubConfigured, githubErrorMessage, isDemoMode } from '@/lib/mode';
 
+// GitHub API + Gemini Issue Scout (with retries).
+export const maxDuration = 120;
+
 const Body = z.object({ owner: z.string().min(1), repo: z.string().min(1), issueNumber: z.number().int().positive() });
 
 export async function POST(req: Request) {

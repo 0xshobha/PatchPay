@@ -303,11 +303,13 @@ function loadState(): DatabaseState {
   return JSON.parse(JSON.stringify(SEED_DATA));
 }
 
-const inMemoryState: DatabaseState = loadState();
+// Loaded lazily: real (Supabase) mode never imports state from disk.
+let memo: DatabaseState | null = null;
+const state = (): DatabaseState => (memo ??= loadState());
 
 function saveState() {
   try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(inMemoryState, null, 2), 'utf-8');
+    fs.writeFileSync(DB_FILE, JSON.stringify(state(), null, 2), 'utf-8');
   } catch {}
 }
 
@@ -325,8 +327,8 @@ export class MockQueryBuilder {
 
   constructor(table: string) {
     this.tableName = table as keyof DatabaseState;
-    if (!inMemoryState[this.tableName]) {
-      (inMemoryState as unknown as Record<string, unknown[]>)[table] = [];
+    if (!state()[this.tableName]) {
+      (state() as unknown as Record<string, unknown[]>)[table] = [];
     }
   }
 
@@ -370,7 +372,7 @@ export class MockQueryBuilder {
 
   insert(data: Record<string, unknown> | Record<string, unknown>[]) {
     this.insertData = data;
-    const rows = inMemoryState[this.tableName] as unknown as Record<string, unknown>[];
+    const rows = state()[this.tableName] as unknown as Record<string, unknown>[];
     const items = Array.isArray(data) ? data : [data];
     for (const item of items) {
       if (!item.id && this.tableName === 'events') {
@@ -391,7 +393,7 @@ export class MockQueryBuilder {
   }
 
   upsert(data: Record<string, unknown>, options?: { onConflict?: string }) {
-    const rows = inMemoryState[this.tableName] as unknown as Record<string, unknown>[];
+    const rows = state()[this.tableName] as unknown as Record<string, unknown>[];
     const conflicts = options?.onConflict ? options.onConflict.split(',') : ['id'];
     const existingIndex = rows.findIndex((r) => conflicts.every((c) => r[c] === data[c]));
     if (existingIndex >= 0) {
@@ -404,7 +406,7 @@ export class MockQueryBuilder {
   }
 
   private execute() {
-    let rows = [...((inMemoryState[this.tableName] ?? []) as unknown as Record<string, unknown>[])];
+    let rows = [...((state()[this.tableName] ?? []) as unknown as Record<string, unknown>[])];
 
     // If updateData is queued, apply updates to matching rows
     if (this.updateData) {
@@ -445,7 +447,7 @@ export class MockQueryBuilder {
 
     // Handle joins (e.g., '*, bounties(*)')
     if (this.selectFields.includes('bounties(*)') && this.tableName === 'proofs') {
-      const bounties = inMemoryState.bounties as unknown as Record<string, unknown>[];
+      const bounties = state().bounties as unknown as Record<string, unknown>[];
       rows = rows.map((p) => {
         const bounty = bounties.find((b) => b.id === p.bounty_id) ?? null;
         return { ...p, bounties: bounty };

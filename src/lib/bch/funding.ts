@@ -1,7 +1,8 @@
 'use client';
 import { TransactionBuilder, placeholderP2PKHUnlocker, type SpendableUtxo } from 'cashscript';
 import type { DappConnectionManager } from '@wizardconnect/dapp';
-import { getProvider, DUST } from './network';
+import { hashTransaction, hexToBin } from '@bitauth/libauth';
+import { getProvider, DUST, NETWORK } from './network';
 import { addressFromPubkey } from './keys';
 
 type HdUtxo = SpendableUtxo & { address: string; hdPath: { name: 'receive' | 'change'; addressIndex: number } };
@@ -33,7 +34,9 @@ export async function fundEscrow(mgr: DappConnectionManager, escrowAddress: stri
   const picked: HdUtxo[] = [];
   let sum = 0n;
   for (const u of utxos) { picked.push(u); sum += u.satoshis; if (sum >= amountSats + feeGuess) break; }
-  if (sum < amountSats + feeGuess) throw new Error('Not enough BCH in the connected wallet');
+  if (sum < amountSats + feeGuess) {
+    throw new Error(`Not enough ${NETWORK} BCH in the connected wallet: has ${(Number(sum) / 1e8).toFixed(5)}, needs ${(Number(amountSats + feeGuess) / 1e8).toFixed(5)}${NETWORK === 'chipnet' ? ' (is the wallet in chipnet/testnet mode?)' : ''}`);
+  }
 
   const changePk = mgr.getPubkey(1, 0n)!;
   const change = sum - amountSats - feeGuess;
@@ -44,8 +47,19 @@ export async function fundEscrow(mgr: DappConnectionManager, escrowAddress: stri
 
   // CashScript 0.14 builds the BCH-WalletConnect object; WizardConnect additionally needs
   // inputPaths = [inputIndex, pathName, addressIndex] so the HD wallet knows which key signs.
-  const wc = b.generateWcTransactionObject({ broadcast: true, userPrompt: 'Lock bounty in PatchPay escrow' });
+  const wc = b.generateWcTransactionObject({ broadcast: true, userPrompt: 'Lock BCH in a PatchPay bounty escrow' });
   const inputPaths = picked.map((u, i) => [i, u.hdPath.name, u.hdPath.addressIndex] as [number, 'receive' | 'change', number]);
   const res = await mgr.signTransaction({ transaction: wc, inputPaths });
-  return res;
+  if (res.error) throw new Error(res.error);
+  if (!res.signedTransaction) throw new Error('The wallet did not return a signed transaction');
+
+  // The wallet was asked to broadcast; broadcast again ourselves so funding never
+  // depends on one wallet's behaviour. "Already known" is fine.
+  const txid = hashTransaction(hexToBin(res.signedTransaction));
+  try {
+    await getProvider().sendRawTransaction(res.signedTransaction);
+  } catch (e) {
+    if (!/already|txn-already-known/i.test((e as Error).message ?? '')) throw e;
+  }
+  return { txid, hex: res.signedTransaction };
 }
