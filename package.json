@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node init && next dev",
+    "build": "node init && next build",
+    "start": "node init && next start",
     "lint": "eslint",
     "test:contract": "cashc contracts/PatchEscrow.cash -o contracts/PatchEscrow.json && node scripts/escrow.test.mjs",
     "contract:build": "cashc contracts/PatchEscrow.cash -f ts -o src/lib/bch/PatchEscrow.artifact.ts",
