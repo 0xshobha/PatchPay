@@ -149,7 +149,7 @@ export function BackBounty({ bountyId, escrow }: { bountyId: string; escrow: str
         </>
       )}
       {busy && <p className="text-xs mt-2">{busy}</p>}
-      {err && <p className="text-xs mt-2 text-del">{err}</p>}
+      {err && <p className="text-xs mt-2 text-del break-all select-all">{err}</p>}
     </div>
   );
 }

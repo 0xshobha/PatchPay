@@ -35,7 +35,12 @@ export async function fundEscrow(mgr: DappConnectionManager, escrowAddress: stri
   let sum = 0n;
   for (const u of utxos) { picked.push(u); sum += u.satoshis; if (sum >= amountSats + feeGuess) break; }
   if (sum < amountSats + feeGuess) {
-    throw new Error(`Not enough ${NETWORK} BCH in the connected wallet: has ${(Number(sum) / 1e8).toFixed(5)}, needs ${(Number(amountSats + feeGuess) / 1e8).toFixed(5)}${NETWORK === 'chipnet' ? ' (is the wallet in chipnet/testnet mode?)' : ''}`);
+    const fundMe = walletReceiveAddress(mgr);
+    throw new Error(
+      `Not enough ${NETWORK} BCH in the connected wallet: has ${(Number(sum) / 1e8).toFixed(5)}, needs ${(Number(amountSats + feeGuess) / 1e8).toFixed(5)}.` +
+      (fundMe ? ` Send ${NETWORK} coins to ${fundMe}` : '') +
+      (NETWORK === 'chipnet' ? ' (faucet: tbch.googol.cash, network: chipnet) and keep the wallet in chipnet mode.' : '.'),
+    );
   }
 
   const changePk = mgr.getPubkey(1, 0n)!;
