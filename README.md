@@ -98,3 +98,7 @@ Develop on **chipnet** (`NEXT_PUBLIC_BCH_NETWORK=chipnet`, `bchtest:` addresses,
 | Refund (if shown) | `<add mainnet txid>` |
 
 Contract tests: `scripts/escrow.test.mjs` (forged signature, wrong recipient, early refund all revert) via `npm run test:contract`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for PatchPay claim instructions, including the PR body format and payout requirements.
