@@ -37,10 +37,19 @@ export function ConnectBar() {
           {wc.walletName ?? 'wallet'} · {addr.split(':')[1].slice(0, 6)}…{addr.slice(-4)}
         </button>
       ) : (
-        <button className="btn btn-ink !py-1 !px-2 !text-[11px]" onClick={openQr}>
-          {wc.state === 'connecting' || wc.state === 'reconnecting' ? 'waiting for wallet…' : 'connect wallet'}
-        </button>
+        <>
+          <button className="btn btn-ink !py-1 !px-2 !text-[11px]" onClick={openQr}>
+            {wc.state === 'connecting' || wc.state === 'reconnecting' ? 'waiting for wallet…' : 'connect wallet'}
+          </button>
+          {(wc.state === 'connecting' || wc.state === 'reconnecting' || wc.error) && (
+            // A stuck or stale pairing (e.g. a wallet that never answered) is cleared here.
+            <button className="ink-link text-[11px]" title="Cancel this pairing and start fresh" onClick={() => { void wc.disconnect(); }}>
+              reset
+            </button>
+          )}
+        </>
       )}
+      {wc.error && <span className="text-del text-[11px]" role="alert">wallet: {wc.error}</span>}
     </span>
   );
 }

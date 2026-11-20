@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useWizardConnect, WizardConnectQRDialog, type UseWizardConnectResult } from '@wizardconnect/react';
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
+import { NETWORK } from '@/lib/bch/network';
 
 type Ctx = {
   wc: UseWizardConnectResult;
@@ -78,7 +79,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       {wc.uri && wc.qrUri && (
         <WizardConnectQRDialog
           show={show && wc.state !== 'connected'} onClose={() => setShow(false)} uri={wc.uri} qrUri={wc.qrUri}
-          title="Connect a BCH wallet" subtitle="Scan with Paytaca, Cashonize or Selene (WizardConnect)"
+          title="Connect a BCH wallet"
+          subtitle={`Scan with the Paytaca mobile app, or copy the code into Cashonize (v0.9+) or Selene. Browser extensions can't scan. Wallet must be on ${NETWORK}.`}
           theme={{
             backdropColor: 'rgba(23,21,15,.55)', dialogBackground: '#f7f4ec', headerBackground: '#f7f4ec',
             titleColor: '#17150f', subtitleColor: '#4a463b', qrForeground: '#17150f', qrBackground: '#f7f4ec',
