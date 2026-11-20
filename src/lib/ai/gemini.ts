@@ -55,6 +55,7 @@ const IssueScout = z.object({
   likelyFiles: strList(8),
   acceptanceCriteria: strList(6),
   agentFriendly: z.boolean().catch(false),
+  category: z.enum(['docs', 'bug', 'feature', 'security', 'other']).catch('other'),
 });
 export type IssueScoutResult = z.infer<typeof IssueScout>;
 
@@ -62,7 +63,8 @@ export function scoutIssue(input: { repo: string; title: string; body: string; t
   return geminiJson(
     `You are a senior maintainer of ${input.repo}. Analyse this GitHub issue for a bounty.
 Return JSON with keys: summary (2 sentences), difficulty (trivial|easy|medium|hard), estimatedHours (number),
-likelyFiles (paths from the file list only), acceptanceCriteria (testable, max 6), agentFriendly (can an AI coding agent likely solve it alone).
+likelyFiles (paths from the file list only), acceptanceCriteria (testable, max 6), agentFriendly (can an AI coding agent likely solve it alone),
+category (one of: docs, bug, feature, security, other).
 ISSUE TITLE: ${input.title}
 ISSUE BODY: ${input.body.slice(0, 8000)}
 FILE LIST: ${input.tree.slice(0, 400).join('\n')}`,

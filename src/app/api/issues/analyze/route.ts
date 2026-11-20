@@ -4,6 +4,8 @@ import { octokitForRepo, repoHasWorkflows } from '@/lib/github/app';
 import { scoutIssue } from '@/lib/ai/gemini';
 import { githubLoginFromRequest } from '@/lib/auth';
 import { githubConfigured, githubErrorMessage, isDemoMode } from '@/lib/mode';
+import { categoryFromLabels } from '@/lib/categories';
+import { getRateCard } from '@/lib/rates';
 
 // GitHub API + Gemini Issue Scout (with retries).
 export const maxDuration = 120;
@@ -18,7 +20,7 @@ export async function POST(req: Request) {
   const { owner, repo, issueNumber } = p.data;
 
   if (githubConfigured() && process.env.GEMINI_API_KEY) {
-    let issue: { title: string; body?: string | null; html_url: string; pull_request?: unknown };
+    let issue: { title: string; body?: string | null; html_url: string; pull_request?: unknown; labels?: (string | { name?: string | null })[] };
     let files: string[];
     try {
       const ok = await octokitForRepo(owner, repo);
@@ -31,11 +33,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: githubErrorMessage(e, owner, repo) }, { status: 502 });
     }
     try {
-      const [scout, hasWorkflows] = await Promise.all([
+      const [scout, hasWorkflows, card] = await Promise.all([
         scoutIssue({ repo: `${owner}/${repo}`, title: issue.title, body: issue.body ?? '', tree: files }),
         repoHasWorkflows(owner, repo).catch(() => null),
+        getRateCard(owner, repo),
       ]);
-      return NextResponse.json({ issue: { title: issue.title, url: issue.html_url }, scout, ci: { hasWorkflows } });
+      // GitHub labels are the maintainer's own classification, so they win over the AI.
+      const fromLabels = categoryFromLabels(issue.labels ?? []);
+      const category = fromLabels ?? scout.category;
+      return NextResponse.json({
+        issue: { title: issue.title, url: issue.html_url },
+        scout: { ...scout, category },
+        category: { value: category, source: fromLabels ? 'label' : 'ai' },
+        rate: { sats: card[category].sats, source: card[category].source },
+        rates: card,
+        ci: { hasWorkflows },
+      });
     } catch (e) {
       console.warn('Issue Scout (Gemini) failed:', e);
       return NextResponse.json({ error: 'The AI Issue Scout is busy or unavailable right now. Please press Analyse again in a few seconds.' }, { status: 503 });

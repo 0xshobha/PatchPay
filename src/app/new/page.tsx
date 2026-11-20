@@ -6,6 +6,7 @@ import { fundEscrow, walletReceiveAddress } from '@/lib/bch/funding';
 import type { IssueScoutResult } from '@/lib/ai/gemini';
 import { CopyButton } from '@/components/CopyButton';
 import { MINIMAL_CI_YML } from '@/lib/github/ciTemplate';
+import { CATEGORIES, isCategory, type Category } from '@/lib/categories';
 
 export default function NewBounty() {
   const { authFetch, login, wc, openQr } = useApp();
@@ -20,6 +21,15 @@ export default function NewBounty() {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [noCi, setNoCi] = useState(false);
+  const [category, setCategory] = useState<Category | null>(null);
+  const [categorySource, setCategorySource] = useState<'label' | 'ai' | 'you'>('ai');
+  const [rates, setRates] = useState<Record<Category, { sats: number; source: string }> | null>(null);
+
+  const pickCategory = (c: Category, source: 'label' | 'ai' | 'you', card = rates) => {
+    setCategory(c);
+    setCategorySource(source);
+    if (card?.[c]) setBch(String(card[c].sats / 1e8));
+  };
 
   const parsed = issueUrl.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
   const connectedWallet = wc.manager && wc.state === 'connected' ? walletReceiveAddress(wc.manager) : null;
@@ -28,15 +38,25 @@ export default function NewBounty() {
   async function analyse() {
     if (!parsed) return;
     setBusy('Reading the issue…'); setErr(null);
-    const r = await authFetch('/api/issues/analyze', {
-      method: 'POST',
-      body: JSON.stringify({ owner: parsed[1], repo: parsed[2], issueNumber: Number(parsed[3]) }),
-    });
-    const j = await r.json();
+    let r: Response;
+    let j: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    try {
+      r = await authFetch('/api/issues/analyze', {
+        method: 'POST',
+        body: JSON.stringify({ owner: parsed[1], repo: parsed[2], issueNumber: Number(parsed[3]) }),
+      });
+      j = await r.json().catch(() => ({}));
+    } catch {
+      setBusy(null);
+      return setErr('Network error — check your connection and try again.');
+    }
     setBusy(null);
-    if (!r.ok) return setErr(j.error ?? 'Could not analyse. Is the PatchPay GitHub App installed on this repo?');
+    if (!r.ok) return setErr(typeof j.error === 'string' ? j.error : 'Could not analyse. Is the PatchPay GitHub App installed on this repo?');
     setScout(j.scout);
     setNoCi(j.ci?.hasWorkflows === false);
+    const card = j.rates ?? null;
+    setRates(card);
+    if (isCategory(j.category?.value)) pickCategory(j.category.value, j.category.source === 'label' ? 'label' : 'ai', card);
     setTitle(j.issue.title);
     setCriteria(j.scout.acceptanceCriteria.map((c: string) => `- ${c}`).join('\n'));
   }
@@ -57,9 +77,11 @@ export default function NewBounty() {
         deadlineDays: days,
         maintainerAddress: wallet,
         scout,
+        category: category ?? undefined,
       }),
-    });
-    const j = await r.json();
+    }).catch(() => null);
+    if (!r) { setBusy(null); return setErr('Network error — the docket was not filed. Try again.'); }
+    const j = await r.json().catch(() => ({}));
     if (!r.ok) {
       setBusy(null);
       return setErr(typeof j.error === 'string' ? j.error : 'Invalid form');
@@ -102,10 +124,10 @@ export default function NewBounty() {
               type="button"
               className="mono text-xs ink-link"
               onClick={() => {
-                setIssueUrl('https://github.com/cashscript/cashscript/issues/104');
+                setIssueUrl('https://github.com/Mansi2007275/example-repository/issues/1');
               }}
             >
-              Fill sample issue (cashscript#104)
+              Fill sample issue (example-repository#1)
             </button>
           </div>
           {!login && <p className="mono text-xs mt-2 text-del">Sign in first. Only repo maintainers can post.</p>}
@@ -145,10 +167,28 @@ export default function NewBounty() {
           </li>
         )}
 
+        {scout && category && (
+          <li className="mono text-sm">
+            <p className="label mb-2">3 · Category &amp; reward</p>
+            <p>
+              Category: <b>{category}</b> → <b>{rates ? (rates[category].sats / 1e8).toString() : bch} BCH</b>{' '}
+              <span className="text-ink-2">({rates?.[category].source ?? 'default'}{categorySource === 'label' ? ', from GitHub label' : categorySource === 'ai' ? ', AI guess' : ', your pick'})</span>
+            </p>
+            <div className="flex flex-wrap gap-2 mt-2" role="group" aria-label="Category">
+              {CATEGORIES.map((c) => (
+                <button key={c} type="button" aria-pressed={c === category} className={`btn !py-1 !px-2 !text-[11px] ${c === category ? 'btn-ink' : ''}`} onClick={() => pickCategory(c, 'you')}>
+                  {c}
+                </button>
+              ))}
+            </div>
+            {parsed && <p className="text-[11px] text-ink-2 mt-2">The reward below is prefilled from <a className="ink-link" href={`/r/${parsed[1]}/${parsed[2]}`}>this repo&apos;s rate card</a> — you can change it.</p>}
+          </li>
+        )}
+
         {scout && (
           <li className="grid grid-cols-2 gap-5">
             <label>
-              <span className="label">3 · Reward (BCH)</span>
+              <span className="label">4 · Reward (BCH)</span>
               <input className="field mt-1" value={bch} onChange={(e) => setBch(e.target.value)} />
             </label>
             <label>
@@ -167,7 +207,7 @@ export default function NewBounty() {
 
         {scout && (
           <li>
-            <p className="label mb-2">4 · Lock it</p>
+            <p className="label mb-2">5 · Lock it</p>
             {wallet ? (
               <div className="mono text-xs mb-3">
                 <p>Refunds go to maintainer wallet: <span className="break-all font-bold">{wallet}</span></p>

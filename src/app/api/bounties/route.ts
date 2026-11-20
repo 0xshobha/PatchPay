@@ -8,6 +8,7 @@ import { oraclePubkeyHex } from '@/lib/bch/oracle';
 import { isValidAddress } from '@/lib/bch/keys';
 import { NETWORK } from '@/lib/bch/network';
 import { githubConfigured, githubErrorMessage, isDemoMode } from '@/lib/mode';
+import { CATEGORIES } from '@/lib/categories';
 
 // GitHub maintainer check.
 export const maxDuration = 30;
@@ -22,6 +23,7 @@ const Body = z.object({
   deadlineDays: z.number().int().min(1).max(90),
   maintainerAddress: z.string(),
   scout: z.unknown().optional(),
+  category: z.enum(CATEGORIES).optional(),
 });
 
 export async function POST(req: Request) {
@@ -53,7 +55,7 @@ export async function POST(req: Request) {
   const oracle = oraclePubkeyHex();
   const escrow = escrowContract({ bountyUuid: id, oraclePubkeyHex: oracle, maintainerAddress: b.maintainerAddress, deadlineUnix: deadline });
 
-  const { error } = await db().from('bounties').insert({
+  const row = {
     id,
     owner: b.owner,
     repo: b.repo,
@@ -68,7 +70,13 @@ export async function POST(req: Request) {
     deadline_unix: deadline,
     escrow_address: escrow.address,
     network: NETWORK,
-  });
+  };
+  const withCategory: Record<string, unknown> = b.category ? { ...row, category: b.category } : row;
+  let { error } = await db().from('bounties').insert(withCategory);
+  // supabase/rate_cards.sql not run yet -> no `category` column: save without it.
+  if (error && b.category && /category/i.test((error as { message?: string }).message ?? '')) {
+    ({ error } = await db().from('bounties').insert(row));
+  }
   if (error) {
     const e = error as { code?: string; message?: string };
     const msg = e.code === '23505' ? `A bounty for ${b.owner}/${b.repo}#${b.issueNumber} already exists on ${NETWORK}` : `Could not save the bounty: ${e.message ?? 'database error'}`;

@@ -8,6 +8,7 @@ import { EscrowLive } from './EscrowLive';
 import { CopyButton } from '@/components/CopyButton';
 import { BackBounty } from './BackBounty';
 import { PayoutChecklist } from './PayoutChecklist';
+import { CategoryStamp } from '@/components/CategoryStamp';
 
 const BACKABLE = ['open', 'in_review', 'verified'];
 
@@ -40,8 +41,11 @@ export default async function Docket({ params }: { params: Promise<{ id: string 
     <div className="grid md:grid-cols-[1.5fr_1fr] gap-10">
       <div>
         <p className="label">Docket PP-{b.id.slice(0, 4).toUpperCase()} · {b.network}</p>
-        <h1 className="text-4xl font-medium mt-1 leading-tight">{b.issue_title}</h1>
-        <a className="ink-link mono text-sm" href={`https://github.com/${b.owner}/${b.repo}/issues/${b.issue_number}`}>{b.owner}/{b.repo}#{b.issue_number}</a>
+        <h1 className="text-3xl sm:text-4xl font-medium mt-1 leading-tight break-words">{b.issue_title} <CategoryStamp category={b.category} /></h1>
+        <p className="mono text-sm flex flex-wrap gap-x-3">
+          <a className="ink-link" href={`https://github.com/${b.owner}/${b.repo}/issues/${b.issue_number}`}>{b.owner}/{b.repo}#{b.issue_number}</a>
+          <Link className="ink-link" href={`/r/${b.owner}/${b.repo}`}>rate card</Link>
+        </p>
 
         <div className="mt-8">
           <p className="label mb-1">Acceptance criteria</p>

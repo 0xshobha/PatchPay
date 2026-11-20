@@ -1,15 +1,17 @@
 import { connection } from 'next/server';
 import Link from 'next/link';
 import { db } from '@/lib/db/supabase';
+import { NETWORK } from '@/lib/bch/network';
+import { CategoryStamp } from '@/components/CategoryStamp';
 
-type Row = { id: string; owner: string; repo: string; issue_number: number; issue_title: string; amount_sats: number; status: string; deadline_unix: number; created_at: string };
+type Row = { id: string; owner: string; repo: string; issue_number: number; issue_title: string; amount_sats: number; status: string; deadline_unix: number; created_at: string; network?: string; category?: string | null };
 
 type Backing = { count: number; sats: number };
 
 async function bounties(): Promise<{ rows: Row[]; backing: Map<string, Backing> }> {
   const backing = new Map<string, Backing>();
   try {
-    const { data } = await db().from('bounties').select('id,owner,repo,issue_number,issue_title,amount_sats,status,deadline_unix,created_at')
+    const { data } = await db().from('bounties').select('*').eq('network', NETWORK)
       .neq('status', 'awaiting_funds').order('created_at', { ascending: false }).limit(30);
     const rows = (data as Row[]) ?? [];
     if (rows.length) {
@@ -86,7 +88,7 @@ export default async function Home() {
               {rows.map((r) => (
                 <tr key={r.id} className="border-t rule hover:bg-paper-2">
                   <td className="py-3 pr-3"><Link href={`/b/${r.id}`} className="ink-link">{docket(r.id)}</Link></td>
-                  <td className="pr-3 font-serif text-base"><span className="text-ink-2 mono text-xs">{r.owner}/{r.repo}#{r.issue_number}</span><br />{r.issue_title}</td>
+                  <td className="pr-3 font-serif text-base"><Link href={`/r/${r.owner}/${r.repo}`} className="text-ink-2 mono text-xs hover:underline">{r.owner}/{r.repo}#{r.issue_number}</Link><br />{r.issue_title} <CategoryStamp category={r.category} size="xs" /></td>
                   <td className="text-right">{bch(backing.get(r.id)?.sats || Number(r.amount_sats))}</td>
                   <td className="text-right pl-3">{backing.get(r.id)?.count ?? 0}</td>
                   <td className="text-right pl-3 uppercase text-xs">{r.status.replace('_', ' ')}</td>
