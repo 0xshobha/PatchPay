@@ -1,7 +1,7 @@
 'use client';
 import { TransactionBuilder, placeholderP2PKHUnlocker, type SpendableUtxo } from 'cashscript';
 import type { DappConnectionManager } from '@wizardconnect/dapp';
-import { hashTransaction, hexToBin } from '@bitauth/libauth';
+import { hashTransaction, hexToBin, stringify } from '@bitauth/libauth';
 import { getProvider, DUST, NETWORK } from './network';
 import { addressFromPubkey } from './keys';
 
@@ -54,7 +54,11 @@ export async function fundEscrow(mgr: DappConnectionManager, escrowAddress: stri
   // inputPaths = [inputIndex, pathName, addressIndex] so the HD wallet knows which key signs.
   const wc = b.generateWcTransactionObject({ broadcast: true, userPrompt: 'Lock BCH in a PatchPay bounty escrow' });
   const inputPaths = picked.map((u, i) => [i, u.hdPath.name, u.hdPath.addressIndex] as [number, 'receive' | 'change', number]);
-  const res = await mgr.signTransaction({ transaction: wc, inputPaths });
+  // The relay carries JSON, which cannot hold BigInt / Uint8Array. WizardConnect's
+  // wire format is libauth "extended JSON" (<bigint: 123n>, <Uint8Array: 0x…>),
+  // which is exactly what libauth's stringify() produces.
+  const relaySafe = JSON.parse(stringify(wc)) as typeof wc;
+  const res = await mgr.signTransaction({ transaction: relaySafe, inputPaths });
   if (res.error) throw new Error(res.error);
   if (!res.signedTransaction) throw new Error('The wallet did not return a signed transaction');
 
