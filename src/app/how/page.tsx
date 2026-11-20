@@ -4,7 +4,7 @@ export default function How() {
     ['Lock', 'PatchPay derives a one-off PatchEscrow contract address for that issue. The maintainer funds it from Paytaca, Cashonize or Selene over WizardConnect. Anyone can see the BCH sitting there.'],
     ['Fix', 'Anyone, human or coding agent, opens a PR with “Fixes #N” and a PatchPay-Address line. Nothing to sign up for.'],
     ['Prove', 'On merge, PatchPay reads GitHub directly: merge commit, head SHA, diff SHA-256, every CI check run, plus a sceptical AI review for missed criteria and AI-slop. That becomes the PatchProof, hashed and posted on the PR.'],
-    ['Pay', 'The maintainer clicks approve. The oracle signs (bountyId, recipient, proofHash); the contract checks that signature, pays exactly that address, and writes the proof hash into an OP_RETURN.'],
+    ['Pay', 'The merge is the maintainer’s approval. If CI is green, the PR has a valid payout address, the AI review finds the criteria met, and a maintainer other than the author merged it, the oracle signs (bountyId, recipient, proofHash) and the contract pays exactly that address, writing the proof hash into an OP_RETURN. Anything less waits for a maintainer’s manual approval.'],
     ['Refund', 'Nobody fixed it by the deadline? Anyone can trigger the refund. The contract only lets funds go back to the maintainer.'],
   ];
   return (

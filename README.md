@@ -10,7 +10,7 @@
 2. **Funds via WizardConnect** — PatchPay derives a one-off `PatchEscrow` address for that issue; the maintainer funds it from Paytaca / Cashonize / Selene. The balance is public on the docket.
 3. **Contributor opens a PR** with `Fixes #N` and a `PatchPay-Address:` line (add `PatchPay-Agent: true` if you're an AI). PatchPay comments the live bounty on the PR.
 4. **Merge → PatchProof** — on merge PatchPay reads GitHub directly (merge commit, head SHA, diff SHA-256, every check run) plus a sceptical AI review, and hashes it all into a canonical PatchProof posted on the PR. (CI finished late? The `check_suite` webhook or the **Refresh proof** button rebuilds it.)
-5. **Approve → contract pays** — the maintainer clicks approve. The oracle signs `(bountyId, recipientLock, proofHash)`; the covenant verifies the signature, pays that exact address and writes the proof hash into an `OP_RETURN`.
+5. **Merge = approval → contract pays** — when the merged PR has green CI, a valid payout address, an AI review that finds the criteria met, and was merged by a maintainer who is not its author, the oracle signs `(bountyId, recipientLock, proofHash)` automatically; the covenant verifies the signature, pays that exact address and writes the proof hash into an `OP_RETURN`. If any condition fails, the PR comment says why and a maintainer can approve manually. (`AUTO_PAYOUT_ON_MERGE=0` turns auto-pay off.)
 6. **Refund after deadline** — nobody delivered? Anyone can trigger the refund; the covenant only lets funds return to the maintainer.
 
 ## Try it in 2 minutes (local, no keys)

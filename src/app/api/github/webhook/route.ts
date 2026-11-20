@@ -6,6 +6,7 @@ import { githubApp } from '@/lib/github/app';
 import { buildPatchProof, commentOnPr } from '@/lib/github/verify';
 import { proofHash, checksAllGreen, type PatchProof } from '@/lib/patchproof/proof';
 import { rebuildProof } from '@/lib/patchproof/rebuild';
+import { autoPayoutEnabled, autoPayoutIfEligible } from '@/lib/payout';
 import { db, logEvent } from '@/lib/db/supabase';
 import { NETWORK } from '@/lib/bch/network';
 import { isValidAddress } from '@/lib/bch/keys';
@@ -79,26 +80,38 @@ async function handle(event: string | null, payload: any) {
       `| Diff sha256 | \`${proof.patch.diffSha256.slice(0, 16)}…\` |`,
       `| Payout to | ${proof.contributor.payoutAddress || '⚠️ add `PatchPay-Address:` to the PR body'} |`,
       ``,
-      `Maintainer: approve the payout at ${site}/b/${bounty.id}`,
+      autoPayoutEnabled()
+        ? `The merge counts as the maintainer's approval: if every check passes, the escrow pays automatically. Docket: ${site}/b/${bounty.id}`
+        : `Maintainer: approve the payout at ${site}/b/${bounty.id}`,
     ].join('\n'));
-    return NextResponse.json({ ok: true, hash });
+
+    // Merge = approval. Pay now if everything checks out; otherwise say why on the PR.
+    const { data: saved } = await db().from('proofs').select('id').eq('proof_hash', hash).maybeSingle();
+    const auto = saved ? await autoPayoutIfEligible(saved.id, { notifyOnSkip: true }) : { paid: false, reason: 'proof not saved' };
+    return NextResponse.json({ ok: true, hash, auto });
   }
 
   // --- CI finished after the merge: rebuild any pending proof for this commit --
-  if (event === 'check_suite' && payload.action === 'completed') {
+  // check_suite is preferred; check_run is a fallback for Apps not subscribed to suites
+  // (only proofs that are not green yet are rebuilt, so N check runs don't spam the PR).
+  if ((event === 'check_suite' || event === 'check_run') && payload.action === 'completed') {
     const owner = payload.repository.owner.login as string;
     const repo = payload.repository.name as string;
-    const headSha = payload.check_suite.head_sha as string;
+    const headSha = (payload.check_suite?.head_sha ?? payload.check_run?.head_sha) as string;
 
     const { data: pending } = await db().from('proofs').select('*, bounties(*)').eq('status', 'pending');
-    const rows = ((pending ?? []) as Array<{ id: string; pr_number: number; proof: PatchProof; bounties: Record<string, unknown> | null }>)
-      .filter((r) => r.bounties && r.bounties.owner === owner && r.bounties.repo === repo && r.proof?.patch?.headSha === headSha);
+    const rows = ((pending ?? []) as Array<{ id: string; pr_number: number; proof: PatchProof; checks_green: boolean; bounties: Record<string, unknown> | null }>)
+      .filter((r) => r.bounties && r.bounties.owner === owner && r.bounties.repo === repo && r.proof?.patch?.headSha === headSha)
+      .filter((r) => event === 'check_suite' || !r.checks_green);
     if (!rows.length) return NextResponse.json({ skipped: 'no pending proof for this commit' });
 
     const results = [];
     for (const r of rows) {
       const { hash, green } = await rebuildProof(r.bounties as unknown as Parameters<typeof rebuildProof>[0], r, 'webhook');
-      results.push({ proofId: r.id, hash, green });
+      // CI just finished: if it is green now, this is the moment to pay. Only explain a
+      // skip on the PR when CI is green (otherwise the next check_suite will retry).
+      const auto = await autoPayoutIfEligible(r.id, { notifyOnSkip: green });
+      results.push({ proofId: r.id, hash, green, auto });
     }
     return NextResponse.json({ ok: true, refreshed: results });
   }

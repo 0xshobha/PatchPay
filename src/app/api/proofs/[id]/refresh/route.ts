@@ -4,6 +4,7 @@ import { githubLoginFromRequest } from '@/lib/auth';
 import { isMaintainer } from '@/lib/github/app';
 import { rebuildProof } from '@/lib/patchproof/rebuild';
 import { githubConfigured, githubErrorMessage } from '@/lib/mode';
+import { autoPayoutIfEligible } from '@/lib/payout';
 
 // GitHub API + Gemini PR review.
 export const maxDuration = 120;
@@ -36,7 +37,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   try {
     const { hash, green } = await rebuildProof(b, row, login);
-    return NextResponse.json({ hash, green });
+    const auto = await autoPayoutIfEligible(row.id, { notifyOnSkip: false });
+    return NextResponse.json({ hash, green, auto });
   } catch (e) {
     return NextResponse.json({ error: `Could not rebuild the proof: ${githubErrorMessage(e, b.owner, b.repo)}` }, { status: 502 });
   }
