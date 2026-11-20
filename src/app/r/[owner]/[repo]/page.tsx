@@ -6,6 +6,7 @@ import { CATEGORIES } from '@/lib/categories';
 import { getRateCard } from '@/lib/rates';
 import { CategoryStamp } from '@/components/CategoryStamp';
 import { RateCardEditor } from './RateCardEditor';
+import { CopyButton } from '@/components/CopyButton';
 
 type Bounty = { id: string; issue_number: number; issue_title: string; amount_sats: number; status: string; category?: string | null; created_at: string };
 
@@ -29,6 +30,8 @@ export default async function RepoRateCard({ params }: { params: Promise<{ owner
   const status = new Map(bounties.map((b) => [b.id, b.status]));
   const paidSats = sum('release');
   const openSats = sum('fund', (id) => !['paid', 'refunded', 'cancelled'].includes(status.get(id) ?? ''));
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? '';
+  const badgeMd = `[![PatchPay](${site}/badge/${owner}/${repo})](${site}/r/${owner}/${repo})`;
 
   return (
     <div className="max-w-3xl">
@@ -56,6 +59,16 @@ export default async function RepoRateCard({ params }: { params: Promise<{ owner
           <div className="flex justify-between py-0.5"><span>open (backed)</span><span className="font-bold">{bch(openSats)} BCH</span></div>
           <div className="flex justify-between py-0.5"><span>paid to contributors</span><span className="font-bold">{bch(paidSats)} BCH</span></div>
         </div>
+      </div>
+
+      <div className="mt-8 mono text-xs">
+        <p className="label mb-2">README badge</p>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/badge/${owner}/${repo}`} alt={`PatchPay badge for ${owner}/${repo}`} height={20} />
+          <CopyButton text={badgeMd} label="Copy markdown" />
+        </div>
+        <pre className="mt-2 bg-paper-2 p-2 whitespace-pre-wrap break-all select-all">{badgeMd}</pre>
       </div>
 
       <RateCardEditor owner={owner} repo={repo} initial={Object.fromEntries(CATEGORIES.map((c) => [c, card[c].sats])) as Record<(typeof CATEGORIES)[number], number>} />
