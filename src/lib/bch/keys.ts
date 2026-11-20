@@ -22,9 +22,16 @@ export function lockFromAddress(address: string): Uint8Array {
   return res.bytecode;
 }
 
+/**
+ * Placeholder addresses copied from docs (e.g. a hash of repeated 0x0b bytes) are
+ * valid cashaddrs that nobody holds a key for; paying one burns the bounty. A real
+ * hash160 has ~20 distinct bytes, so treat <= 4 distinct values as a placeholder.
+ */
+export const isPlaceholderPayload = (payload: Uint8Array) => new Set(payload).size <= 4;
+
 export function isValidAddress(address: string) {
   const d = decodeCashAddress(address);
-  return typeof d !== 'string' && d.prefix === ADDRESS_PREFIX;
+  return typeof d !== 'string' && d.prefix === ADDRESS_PREFIX && !isPlaceholderPayload(d.payload);
 }
 
 /** Re-encode any p2pkh cashaddr as its token-aware (p2pkhWithTokens) form. */
