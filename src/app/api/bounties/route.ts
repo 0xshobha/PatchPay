@@ -7,6 +7,7 @@ import { escrowContract } from '@/lib/bch/escrow';
 import { oraclePubkeyHex } from '@/lib/bch/oracle';
 import { isValidAddress } from '@/lib/bch/keys';
 import { NETWORK } from '@/lib/bch/network';
+import { githubConfigured, githubErrorMessage, isDemoMode } from '@/lib/mode';
 
 const Body = z.object({
   owner: z.string().min(1),
@@ -23,20 +24,25 @@ const Body = z.object({
 export async function POST(req: Request) {
   const login = await githubLoginFromRequest(req);
   if (!login) return NextResponse.json({ error: 'Sign in with GitHub first' }, { status: 401 });
-  const body = Body.safeParse(await req.json());
-  if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
+  const body = Body.safeParse(await req.json().catch(() => null));
+  if (!body.success) {
+    const first = body.error.issues[0];
+    return NextResponse.json({ error: first ? `Invalid ${first.path.join('.') || 'input'}: ${first.message}` : 'Invalid form' }, { status: 400 });
+  }
   const b = body.data;
   if (!isValidAddress(b.maintainerAddress)) return NextResponse.json({ error: `Address must be a ${NETWORK} cashaddr` }, { status: 400 });
 
-  // Only check GitHub permissions if GitHub App credentials exist
-  if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY) {
+  // Fail closed: if GitHub cannot confirm the poster maintains the repo, refuse.
+  if (githubConfigured()) {
     try {
       if (!(await isMaintainer(b.owner, b.repo, login))) {
         return NextResponse.json({ error: 'Only repo admins/maintainers can post bounties' }, { status: 403 });
       }
     } catch (e) {
-      console.warn('GitHub App maintainer check skipped:', e);
+      return NextResponse.json({ error: githubErrorMessage(e, b.owner, b.repo) }, { status: 502 });
     }
+  } else if (!isDemoMode()) {
+    return NextResponse.json({ error: 'GitHub App is not configured on the server' }, { status: 503 });
   }
 
   const id = crypto.randomUUID();
@@ -60,7 +66,11 @@ export async function POST(req: Request) {
     escrow_address: escrow.address,
     network: NETWORK,
   });
-  if (error) return NextResponse.json({ error: (error as { message?: string }).message ?? 'Failed to save' }, { status: 409 });
+  if (error) {
+    const e = error as { code?: string; message?: string };
+    const msg = e.code === '23505' ? `A bounty for ${b.owner}/${b.repo}#${b.issueNumber} already exists on ${NETWORK}` : `Could not save the bounty: ${e.message ?? 'database error'}`;
+    return NextResponse.json({ error: msg }, { status: 409 });
+  }
   await logEvent(id, login, 'bounty.created', { amountSats: b.amountSats, escrow: escrow.address });
   return NextResponse.json({ id, escrowAddress: escrow.address, deadline });
 }

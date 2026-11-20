@@ -1,0 +1,25 @@
+name: ci
+
+# PatchProof only lets a payout through when every check run on the PR's head
+# commit is green, and it needs at least one. This workflow provides those checks.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npx next typegen && npx tsc --noEmit
+      - name: Lint
+        run: npx eslint src
+      - name: Contract tests
+        run: npm run test:contract

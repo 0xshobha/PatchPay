@@ -49,35 +49,40 @@ export async function releaseEscrow(
 ) {
   const c = escrowContract(p);
   const recipientLock = lockFromAddress(recipientAddress);
-  const utxos = await c.getUtxos();
+  const utxos = (await c.getUtxos()).filter((u) => !u.token);
   if (!utxos.length) throw new Error('Escrow is empty');
-  const txids: string[] = [];
+  const released: { txid: string; amountSats: bigint }[] = [];
+  const fee = 1500n; // well inside the contract's 3000-sat fee budget
+  if (fee > ESCROW_FEE_BUDGET) throw new Error('fee exceeds contract budget');
   for (const u of utxos) {
-    const fee = 1500n;
     const amount = u.satoshis - fee;
-    if (amount < DUST || fee > ESCROW_FEE_BUDGET) continue;
+    if (amount < DUST) continue;
     const tx = await new TransactionBuilder({ provider: getProvider() })
       .addInput(u, c.unlock.release(oracleSig, recipientLock, hexToBin(proofHashHex)))
       .addOutput({ to: recipientAddress, amount })
       .addOutput({ to: proofNullData(proofHashHex), amount: 0n })
       .send();
-    txids.push(tx.txid);
+    released.push({ txid: tx.txid, amountSats: amount });
   }
-  return txids;
+  return released;
 }
 
 /** Permissionless refund after the deadline (anyone can call; funds only go to the maintainer). */
 export async function refundEscrow(p: EscrowParams) {
   const c = escrowContract(p);
-  const utxos = await c.getUtxos();
+  const utxos = (await c.getUtxos()).filter((u) => !u.token);
+  if (!utxos.length) throw new Error('Escrow is empty');
   const txids: string[] = [];
   for (const u of utxos) {
     const amount = u.satoshis - 1000n;
     if (amount < DUST) continue;
+    // nLockTime must be >= deadline (contract: tx.time >= deadline) AND <= the chain's
+    // median-time-past, or nodes reject the tx as non-final. The deadline itself is the
+    // smallest valid value, so use exactly that.
     const tx = await new TransactionBuilder({ provider: getProvider() })
       .addInput(u, c.unlock.refund())
       .addOutput({ to: p.maintainerAddress, amount })
-      .setLocktime(Math.max(p.deadlineUnix, Math.floor(Date.now() / 1000) - 600))
+      .setLocktime(p.deadlineUnix)
       .send();
     txids.push(tx.txid);
   }

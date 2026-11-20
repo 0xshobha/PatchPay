@@ -3,6 +3,7 @@ import { db } from '@/lib/db/supabase';
 import { githubLoginFromRequest } from '@/lib/auth';
 import { isMaintainer } from '@/lib/github/app';
 import { rebuildProof } from '@/lib/patchproof/rebuild';
+import { githubConfigured, githubErrorMessage } from '@/lib/mode';
 
 /**
  * Maintainer-only: re-read the PR from GitHub and rebuild the PatchProof on demand.
@@ -19,20 +20,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!b) return NextResponse.json({ error: 'Bounty not found' }, { status: 404 });
   if (row.status === 'paid') return NextResponse.json({ error: 'Already paid — nothing to refresh' }, { status: 409 });
 
-  if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY) {
-    try {
-      if (!(await isMaintainer(b.owner, b.repo, login))) {
-        return NextResponse.json({ error: 'Only repo maintainers can refresh a proof' }, { status: 403 });
-      }
-    } catch (e) {
-      console.warn('GitHub App maintainer check skipped on refresh:', e);
+  if (!githubConfigured()) {
+    return NextResponse.json({ error: 'GitHub App is not configured on the server' }, { status: 503 });
+  }
+  try {
+    if (!(await isMaintainer(b.owner, b.repo, login))) {
+      return NextResponse.json({ error: 'Only repo maintainers can refresh a proof' }, { status: 403 });
     }
+  } catch (e) {
+    return NextResponse.json({ error: githubErrorMessage(e, b.owner, b.repo) }, { status: 502 });
   }
 
   try {
     const { hash, green } = await rebuildProof(b, row, login);
     return NextResponse.json({ hash, green });
   } catch (e) {
-    return NextResponse.json({ error: `Could not rebuild the proof: ${(e as Error).message}` }, { status: 502 });
+    return NextResponse.json({ error: `Could not rebuild the proof: ${githubErrorMessage(e, b.owner, b.repo)}` }, { status: 502 });
   }
 }
