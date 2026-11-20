@@ -26,6 +26,29 @@ export async function isMaintainer(owner: string, repo: string, username: string
   return ['admin', 'maintain'].includes(data.permission) || data.role_name === 'maintain';
 }
 
+/**
+ * Does the repo have any GitHub Actions workflow? (PatchPay pays only on green
+ * checks, so a repo without CI can never auto-pay.) Uses the Actions API when the
+ * App has `actions: read`, otherwise lists .github/workflows via the contents API.
+ * Returns null when GitHub can't tell us.
+ */
+export async function repoHasWorkflows(owner: string, repo: string): Promise<boolean | null> {
+  const ok = await octokitForRepo(owner, repo);
+  try {
+    const { data } = await ok.request('GET /repos/{owner}/{repo}/actions/workflows', { owner, repo, per_page: 1 });
+    return data.total_count > 0;
+  } catch (e) {
+    if ((e as { status?: number }).status !== 403) throw e;
+  }
+  try {
+    const { data } = await ok.request('GET /repos/{owner}/{repo}/contents/{path}', { owner, repo, path: '.github/workflows' });
+    return Array.isArray(data) && data.some((f) => f.type === 'file' && /\.ya?ml$/i.test(f.name));
+  } catch (e) {
+    if ((e as { status?: number }).status === 404) return false;
+    return null;
+  }
+}
+
 /** PR body line: `PatchPay-Address: bitcoincash:q...` and optional `PatchPay-Agent: true` */
 export function parsePrMeta(body: string | null) {
   const addr = body?.match(/PatchPay-Address:\s*((?:bitcoincash|bchtest):[a-z0-9]+)/i)?.[1] ?? null;

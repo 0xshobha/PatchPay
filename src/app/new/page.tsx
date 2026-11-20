@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '@/components/Providers';
 import { fundEscrow, walletReceiveAddress } from '@/lib/bch/funding';
 import type { IssueScoutResult } from '@/lib/ai/gemini';
+import { CopyButton } from '@/components/CopyButton';
+import { MINIMAL_CI_YML } from '@/lib/github/ciTemplate';
 
 export default function NewBounty() {
   const { authFetch, login, wc, openQr } = useApp();
@@ -17,6 +19,7 @@ export default function NewBounty() {
   const [days, setDays] = useState(14);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [noCi, setNoCi] = useState(false);
 
   const parsed = issueUrl.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
   const connectedWallet = wc.manager && wc.state === 'connected' ? walletReceiveAddress(wc.manager) : null;
@@ -33,6 +36,7 @@ export default function NewBounty() {
     setBusy(null);
     if (!r.ok) return setErr(j.error ?? 'Could not analyse. Is the PatchPay GitHub App installed on this repo?');
     setScout(j.scout);
+    setNoCi(j.ci?.hasWorkflows === false);
     setTitle(j.issue.title);
     setCriteria(j.scout.acceptanceCriteria.map((c: string) => `- ${c}`).join('\n'));
   }
@@ -119,6 +123,18 @@ export default function NewBounty() {
             {scout.likelyFiles.length > 0 && (
               <p className="mono text-xs mt-2 text-ink-2">likely files: {scout.likelyFiles.join(', ')}</p>
             )}
+          </li>
+        )}
+
+        {scout && noCi && parsed && (
+          <li className="receipt mono text-xs" role="alert">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="label text-del">No CI in {parsed[1]}/{parsed[2]}</p>
+              <CopyButton text={MINIMAL_CI_YML} label="Copy ci.yml" />
+            </div>
+            <p className="mt-2 text-del font-bold">Payouts need at least one green CI check — this repo has no workflow.</p>
+            <p className="mt-1">Commit this as <b>.github/workflows/ci.yml</b> (replace the echo with your real tests). You can still post the bounty now.</p>
+            <pre className="mt-2 bg-paper-2 p-2 whitespace-pre-wrap break-all select-all">{MINIMAL_CI_YML}</pre>
           </li>
         )}
 

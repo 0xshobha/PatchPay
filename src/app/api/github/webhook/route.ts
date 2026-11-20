@@ -10,7 +10,7 @@ import { autoPayoutEnabled, autoPayoutIfEligible } from '@/lib/payout';
 import { db, logEvent } from '@/lib/db/supabase';
 import { NETWORK } from '@/lib/bch/network';
 import { isValidAddress } from '@/lib/bch/keys';
-import { parsePrMeta } from '@/lib/github/app';
+import { parsePrMeta, repoHasWorkflows } from '@/lib/github/app';
 
 const issueFromBody = (body: string | null) =>
   Number((body ?? '').match(/(?:fixes|closes|resolves)\s+#(\d+)/i)?.[1]);
@@ -136,6 +136,7 @@ async function handle(event: string | null, payload: any) {
     const hasValidAddr = meta.addr ? isValidAddress(meta.addr) : false;
     const site = process.env.NEXT_PUBLIC_SITE_URL ?? '';
     const bch = (Number(bounty.amount_sats) / 1e8).toFixed(5);
+    const hasCi = await repoHasWorkflows(owner, repo).catch(() => null);
     await commentOnPr(owner, repo, prNum, [
       `### 💰 This fixes a funded PatchPay bounty`,
       `**${bch} BCH** is already locked in escrow for issue #${issue}.`,
@@ -144,6 +145,9 @@ async function handle(event: string | null, payload: any) {
       hasValidAddr
         ? `✅ Payout address detected: \`${meta.addr}\``
         : `⚠️ **No valid \`PatchPay-Address:\` for ${NETWORK} found in this PR.** Add a line to the PR body like \`PatchPay-Address: ${NETWORK === 'mainnet' ? 'bitcoincash' : 'bchtest'}:q…\` or you cannot be paid on merge.`,
+      hasCi === false
+        ? `\n⚠️ **Payouts need at least one green CI check — this repo has no GitHub Actions workflow.** Maintainer: add \`.github/workflows/ci.yml\` (the template is shown on PatchPay's post-a-bounty page), or this PR can't be paid automatically.`
+        : '',
     ].filter(Boolean).join('\n'));
 
     return NextResponse.json({ ok: true, commented: true });

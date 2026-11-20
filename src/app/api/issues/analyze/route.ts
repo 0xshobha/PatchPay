@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { octokitForRepo } from '@/lib/github/app';
+import { octokitForRepo, repoHasWorkflows } from '@/lib/github/app';
 import { scoutIssue } from '@/lib/ai/gemini';
 import { githubLoginFromRequest } from '@/lib/auth';
 import { githubConfigured, githubErrorMessage, isDemoMode } from '@/lib/mode';
@@ -31,8 +31,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: githubErrorMessage(e, owner, repo) }, { status: 502 });
     }
     try {
-      const scout = await scoutIssue({ repo: `${owner}/${repo}`, title: issue.title, body: issue.body ?? '', tree: files });
-      return NextResponse.json({ issue: { title: issue.title, url: issue.html_url }, scout });
+      const [scout, hasWorkflows] = await Promise.all([
+        scoutIssue({ repo: `${owner}/${repo}`, title: issue.title, body: issue.body ?? '', tree: files }),
+        repoHasWorkflows(owner, repo).catch(() => null),
+      ]);
+      return NextResponse.json({ issue: { title: issue.title, url: issue.html_url }, scout, ci: { hasWorkflows } });
     } catch (e) {
       console.warn('Issue Scout (Gemini) failed:', e);
       return NextResponse.json({ error: 'The AI Issue Scout is busy or unavailable right now. Please press Analyse again in a few seconds.' }, { status: 503 });

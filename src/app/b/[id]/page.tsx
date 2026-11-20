@@ -7,6 +7,7 @@ import { DocketActions } from './DocketActions';
 import { EscrowLive } from './EscrowLive';
 import { CopyButton } from '@/components/CopyButton';
 import { BackBounty } from './BackBounty';
+import { PayoutChecklist } from './PayoutChecklist';
 
 const BACKABLE = ['open', 'in_review', 'verified'];
 
@@ -71,7 +72,7 @@ export default async function Docket({ params }: { params: Promise<{ id: string 
             <div className="text-xs text-ink-2 mt-1">
               checks {p.checks_green ? 'green' : 'NOT green'} · AI review {p.proof.review.score}/100 · +{p.proof.patch.additions}/−{p.proof.patch.deletions} · {p.status}
             </div>
-            {p.proof.review.slopSignals?.length > 0 && <div className="text-xs text-del mt-1">slop signals: {p.proof.review.slopSignals.join('; ')}</div>}
+            <PayoutChecklist row={p} owner={b.owner} repo={b.repo} pays={pays ?? []} />
             <DocketActions kind="approve" bountyId={b.id} proofId={p.id} disabled={p.status !== 'pending' || !p.checks_green} paid={p.status === 'paid'} />
           </div>
         ))}
