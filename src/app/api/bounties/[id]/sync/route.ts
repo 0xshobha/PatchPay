@@ -46,6 +46,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       funded,
       backers: seen.size,
       recordedSats: String(recordedSats),
+      newTxids: fresh.map((u) => u.txid),
     });
   } catch (err) {
     console.warn('Electrum query error during sync:', err);

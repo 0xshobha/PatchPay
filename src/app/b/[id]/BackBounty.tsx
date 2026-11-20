@@ -1,7 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import QRCode from 'qrcode';
 import { useApp } from '@/components/Providers';
+import { CopyButton } from '@/components/CopyButton';
 import { fundEscrow } from '@/lib/bch/funding';
 import { EXPLORER_TX } from '@/lib/bch/network';
 
@@ -14,9 +16,12 @@ const toSats = (bch: string) => (/^\d*\.?\d{0,8}$/.test(bch.trim()) && bch.trim(
 /** Tells EscrowLive (and anyone else listening) that a fresh sync result is available. */
 export const announceSync = (data: unknown) => window.dispatchEvent(new CustomEvent('patchpay:synced', { detail: data }));
 
+const bchString = (sats: number) => (sats / 1e8).toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+
 /**
- * No-login backing: anyone with a WizardConnect wallet can add BCH to this bounty's
- * escrow in two clicks. Without a wallet connected, the button opens the QR dialog.
+ * No-login backing. Default path works with ANY BCH wallet (phone app, browser
+ * extension, desktop): a payment QR / address for the chosen amount, then
+ * "I've sent it" reads the chain. WizardConnect wallets get one-click backing.
  */
 export function BackBounty({ bountyId, escrow }: { bountyId: string; escrow: string }) {
   const { wc, openQr } = useApp();
@@ -29,13 +34,25 @@ export function BackBounty({ bountyId, escrow }: { bountyId: string; escrow: str
   const connected = Boolean(wc.manager && wc.state === 'connected');
   const sats = toSats(amount);
   const valid = Number.isFinite(sats) && sats >= MIN_SATS && sats <= MAX_SATS;
+  // BIP21-style payment URI: phone wallets pre-fill the amount when scanning.
+  const payUri = valid ? `${escrow}?amount=${bchString(sats)}` : escrow;
+  const [qr, setQr] = useState<string | null>(null);
 
-  async function sync() {
+  useEffect(() => {
+    if (connected) return;
+    let cancelled = false;
+    QRCode.toDataURL(payUri, { errorCorrectionLevel: 'M', margin: 1, scale: 4, color: { dark: '#17150fff', light: '#f7f4ecff' } })
+      .then((u) => { if (!cancelled) setQr(u); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [payUri, connected]);
+
+  async function sync(): Promise<{ ok: boolean; newTxids: string[] }> {
     const r = await fetch(`/api/bounties/${bountyId}/sync`, { method: 'POST' });
     const j = await r.json().catch(() => ({}));
     if (r.ok) announceSync(j);
     router.refresh();
-    return r.ok;
+    return { ok: r.ok, newTxids: Array.isArray(j.newTxids) ? j.newTxids : [] };
   }
 
   async function back() {
@@ -59,7 +76,10 @@ export function BackBounty({ bountyId, escrow }: { bountyId: string; escrow: str
     setErr(null);
     setBusy('Reading the escrow on-chain…');
     try {
-      if (!(await sync())) setErr('Could not reach the BCH network. Try again in a moment.');
+      const res = await sync();
+      if (!res.ok) setErr('Could not reach the BCH network. Try again in a moment.');
+      else if (res.newTxids.length) setTxid(res.newTxids[res.newTxids.length - 1]);
+      else setErr('No new payment seen yet. It usually shows within a few seconds — check that your wallet is on the right network, then try again.');
     } finally {
       setBusy(null);
     }
@@ -68,7 +88,7 @@ export function BackBounty({ bountyId, escrow }: { bountyId: string; escrow: str
   if (txid) {
     return (
       <div id="back" className="receipt mono text-[13px] relative">
-        <div className="flex justify-between"><span>BACKED</span><span className="font-bold">{amount} BCH</span></div>
+        <div className="flex justify-between"><span>BACKED</span><span className="font-bold">on-chain ✓</span></div>
         <div className="border-t border-dashed rule my-2" />
         <p className="text-xs">Your BCH is now locked for whoever fixes this issue.</p>
         <a className="ink-link text-xs break-all block mt-2" href={EXPLORER_TX(txid)} target="_blank" rel="noreferrer">tx {txid}</a>
@@ -98,14 +118,35 @@ export function BackBounty({ bountyId, escrow }: { bountyId: string; escrow: str
       </label>
       {!valid && amount.trim() !== '' && <p className="text-[11px] text-del mt-1">Min {MIN_SATS / 1e8} BCH, max {MAX_SATS / 1e8} BCH.</p>}
 
-      <button className="btn btn-ink w-full mt-4" disabled={!!busy || (connected && !valid)} onClick={back}>
-        {busy ? 'Working…' : connected ? `Lock ${valid ? amount : '…'} BCH` : 'Connect wallet to back'}
-      </button>
-      {!connected && (
-        <p className="text-[11px] text-ink-2 mt-2 leading-snug">
-          Or send any amount to the escrow address / QR above from any BCH wallet, then{' '}
-          <button type="button" className="ink-link" disabled={!!busy} onClick={checkChain}>check the chain</button>.
-        </p>
+      {connected ? (
+        <button className="btn btn-ink w-full mt-4" disabled={!!busy || !valid} onClick={back}>
+          {busy ? 'Working…' : `Lock ${valid ? amount : '…'} BCH`}
+        </button>
+      ) : (
+        <>
+          <p className="label mt-4">Pay from any BCH wallet</p>
+          <p className="text-[11px] text-ink-2 leading-snug mt-1">
+            Phone app, browser extension or desktop wallet: scan the code, or send {valid ? <b>{amount} BCH</b> : 'BCH'} to this address.
+          </p>
+          {qr && (
+            <div className="flex justify-center mt-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qr} alt={`Payment code for ${valid ? amount : ''} BCH to ${escrow}`} width={150} height={150} className="border border-ink" style={{ imageRendering: 'pixelated' }} />
+            </div>
+          )}
+          <p className="break-all text-[11px] select-all mt-2">{escrow}</p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <CopyButton text={escrow} label="Copy address" />
+            <a className="btn !py-1 !px-2 !text-[11px]" href={payUri}>Open in wallet app</a>
+          </div>
+          <button className="btn btn-ink w-full mt-4" disabled={!!busy} onClick={checkChain}>
+            {busy ? 'Working…' : "I've sent it — check the chain"}
+          </button>
+          <p className="text-[11px] text-ink-2 mt-2 leading-snug">
+            WizardConnect wallet?{' '}
+            <button type="button" className="ink-link" onClick={openQr}>Connect it</button> for one-click backing.
+          </p>
+        </>
       )}
       {busy && <p className="text-xs mt-2">{busy}</p>}
       {err && <p className="text-xs mt-2 text-del">{err}</p>}
