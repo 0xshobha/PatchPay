@@ -12,6 +12,10 @@ import { NETWORK } from '@/lib/bch/network';
 import { isValidAddress } from '@/lib/bch/keys';
 import { parsePrMeta, repoHasWorkflows } from '@/lib/github/app';
 
+// A bounty stays claimable after a merged PR that could not be paid (e.g. a
+// self-merge): 'verified' only means a proof exists. Paid/refunded bounties are closed.
+const CLAIMABLE = ['open', 'in_review', 'verified'];
+
 const issueFromBody = (body: string | null) =>
   Number((body ?? '').match(/(?:fixes|closes|resolves)\s+#(\d+)/i)?.[1]);
 
@@ -58,7 +62,7 @@ async function handle(event: string | null, payload: any) {
     if (!issue) return NextResponse.json({ skipped: 'no linked issue' });
 
     const { data: bounty } = await db().from('bounties').select('*')
-      .match({ owner, repo, issue_number: issue, network: NETWORK }).in('status', ['open', 'in_review']).maybeSingle();
+      .match({ owner, repo, issue_number: issue, network: NETWORK }).in('status', CLAIMABLE).maybeSingle();
     if (!bounty) return NextResponse.json({ skipped: 'no open bounty' });
 
     const { proof } = await buildPatchProof({
@@ -125,7 +129,7 @@ async function handle(event: string | null, payload: any) {
     if (!issue) return NextResponse.json({ skipped: 'no linked issue' });
 
     const { data: bounty } = await db().from('bounties').select('*')
-      .match({ owner, repo, issue_number: issue, network: NETWORK }).in('status', ['open', 'in_review']).maybeSingle();
+      .match({ owner, repo, issue_number: issue, network: NETWORK }).in('status', CLAIMABLE).maybeSingle();
     if (!bounty) return NextResponse.json({ skipped: 'no open bounty' });
 
     // Best-effort: mark it in review.

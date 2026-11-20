@@ -99,7 +99,7 @@ export function autoPayoutBlocker(row: ProofWithBounty): string | null {
   if (!p.patch.mergeSha || !p.patch.mergedBy) return 'the PR is not merged';
   if (!row.checks_green) return 'not all CI checks are green yet (it will retry when CI finishes)';
   if (!isValidAddress(p.contributor.payoutAddress)) return 'the PR body has no valid `PatchPay-Address:` for this network';
-  if (p.patch.mergedBy.toLowerCase() === p.contributor.github.toLowerCase()) return 'the PR author merged their own PR — a maintainer must approve it manually';
+  if (p.patch.mergedBy.toLowerCase() === p.contributor.github.toLowerCase()) return 'the PR author merged their own PR, and nobody may pay themselves — a different maintainer must approve it, or the work must come from another account';
   if (!p.review.criteriaMet) return `the AI review says the acceptance criteria are not met (score ${p.review.score}/100)`;
   if (p.review.slopSignals?.length) return `the AI review flagged: ${p.review.slopSignals.join('; ')}`;
   return null;
@@ -139,7 +139,7 @@ export async function autoPayoutIfEligible(proofId: string, opts: { notifyOnSkip
     const { data: pr } = await ok.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', { owner: b.owner, repo: b.repo, pull_number: row.pr_number });
     if (!pr.merged || !pr.merged_by) return skip('GitHub does not show the PR as merged');
     if (pr.head.sha !== row.proof.patch.headSha) return skip('the PR changed since the proof was built');
-    if (pr.merged_by.login.toLowerCase() === pr.user?.login.toLowerCase()) return skip('the PR author merged their own PR — a maintainer must approve it manually');
+    if (pr.merged_by.login.toLowerCase() === pr.user?.login.toLowerCase()) return skip('the PR author merged their own PR, and nobody may pay themselves — a different maintainer must approve it, or the work must come from another account');
     if (!(await isMaintainer(b.owner, b.repo, pr.merged_by.login))) return skip(`@${pr.merged_by.login} is not a repo admin/maintainer`);
 
     const { txids } = await executePayout(row, `auto:${pr.merged_by.login}`);
