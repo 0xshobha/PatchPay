@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { useRouter } from 'next/navigation';
+import { Usd } from '@/components/Usd';
 
 const toBch = (sats: number | bigint) => (Number(sats) / 1e8).toFixed(5);
 
@@ -14,7 +15,7 @@ const toBch = (sats: number | bigint) => (Number(sats) / 1e8).toFixed(5);
  */
 type SyncResult = { totalSats?: string; funded?: boolean; backers?: number };
 
-export function EscrowLive({ bountyId, escrow, amountSats, funded, backers: initialBackers }: { bountyId: string; escrow: string; amountSats: number; funded: boolean; backers: number }) {
+export function EscrowLive({ bountyId, escrow, amountSats, funded, backers: initialBackers, usdPerBch = null, closed = null }: { bountyId: string; escrow: string; amountSats: number; funded: boolean; backers: number; usdPerBch?: number | null; closed?: string | null }) {
   const router = useRouter();
   const [qr, setQr] = useState<string | null>(null);
   const [live, setLive] = useState<{ totalSats: string; funded: boolean } | null>(null);
@@ -55,7 +56,7 @@ export function EscrowLive({ bountyId, escrow, amountSats, funded, backers: init
           if (typeof j.backers === 'number') setBackers(j.backers);
           setState('done');
           // If funding status just flipped, refresh the server component once.
-          if (Boolean(j.funded) !== funded) router.refresh();
+          if (!closed && Boolean(j.funded) !== funded) router.refresh();
         } else {
           setState('offline');
         }
@@ -73,7 +74,8 @@ export function EscrowLive({ bountyId, escrow, amountSats, funded, backers: init
         <span>ON CHAIN NOW</span>
         <span className="font-bold">
           {state === 'loading' && <span className="text-ink-2">reading chain…</span>}
-          {state === 'done' && live && <>{toBch(Number(live.totalSats))} BCH{Number(live.totalSats) >= amountSats ? '' : ' (under target)'}</>}
+          {state === 'done' && live && closed && Number(live.totalSats) === 0 && <span className="text-bch">{closed === 'refunded' ? 'refunded to maintainer' : 'released to contributor'}</span>}
+          {state === 'done' && live && !(closed && Number(live.totalSats) === 0) && <>{toBch(Number(live.totalSats))} BCH{Number(live.totalSats) >= amountSats || closed ? '' : ' (under target)'}<Usd sats={Number(live.totalSats)} rate={usdPerBch} block /></>}
           {state === 'offline' && <span className="text-ink-2">chain offline</span>}
         </span>
       </div>
@@ -82,7 +84,7 @@ export function EscrowLive({ bountyId, escrow, amountSats, funded, backers: init
         <span className="font-bold">{backers}</span>
       </div>
 
-      {qr && (
+      {qr && !closed && (
         <div className="mt-3 flex flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qr} alt={`BCH QR for ${escrow}`} width={140} height={140} className="border border-ink" style={{ imageRendering: 'pixelated' }} />

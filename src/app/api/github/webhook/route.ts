@@ -23,7 +23,9 @@ export async function POST(req: Request) {
   const raw = await req.text();
   const sig = req.headers.get('x-hub-signature-256') ?? '';
   const event = req.headers.get('x-github-event');
-  if (!(await githubApp().webhooks.verify(raw, sig))) return NextResponse.json({ error: 'bad signature' }, { status: 401 });
+  // Missing/garbled signatures make verify() throw; either way it is a 401, never a 500.
+  const valid = sig.startsWith('sha256=') ? await githubApp().webhooks.verify(raw, sig).catch(() => false) : false;
+  if (!valid) return NextResponse.json({ error: 'bad signature' }, { status: 401 });
 
   let payload: Record<string, unknown> & { action?: string };
   try {
@@ -132,6 +134,7 @@ async function handle(event: string | null, payload: any) {
       .match({ owner, repo, issue_number: issue, network: NETWORK }).in('status', CLAIMABLE).maybeSingle();
     if (!bounty) return NextResponse.json({ skipped: 'no open bounty' });
 
+    await logEvent(bounty.id, (payload.pull_request.user?.login as string) ?? 'github', 'pr.opened', { pr: prNum });
     // Best-effort: mark it in review.
     await db().from('bounties').update({ status: 'in_review' }).match({ owner, repo, issue_number: issue, status: 'open' });
 

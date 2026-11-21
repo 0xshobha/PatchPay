@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <BlazeBanner />
           <header className="mx-auto max-w-5xl px-5 pt-6 pb-4 flex flex-wrap gap-y-2 items-end justify-between border-b-2 border-ink">
             <Link href="/" className="leading-none">
-              <span className="text-3xl font-semibold tracking-tight">PatchPay</span>
+              <span className="text-3xl font-semibold tracking-tight">Patch<span className="text-bch">Pay</span></span>
               <span className="mono text-xs ml-2 text-ink-2 hidden sm:inline">office of paid patches</span>
             </Link>
             <nav className="mono text-sm flex flex-wrap gap-x-5 gap-y-2 items-center">
@@ -34,7 +34,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </header>
           <main className="mx-auto max-w-5xl px-5 py-10"><Suspense fallback={<p className="mono text-sm">Fetching the ledger…</p>}>{children}</Suspense></main>
           <footer className="mx-auto max-w-5xl px-5 py-8 mono text-xs text-ink-2 border-t rule">
-            Escrow contract, oracle pubkey and every PatchProof are public. Network: {process.env.NEXT_PUBLIC_BCH_NETWORK ?? 'chipnet'}.
+            Escrow contract, oracle pubkey and every PatchProof are public. Network: {process.env.NEXT_PUBLIC_BCH_NETWORK ?? 'chipnet'}.{' '}
+            ≈ USD figures use the mainnet BCH price (CoinGecko){(process.env.NEXT_PUBLIC_BCH_NETWORK ?? 'chipnet') !== 'mainnet' ? '; chipnet test coins have no value' : ''}.
           </footer>
         </Providers>
       </body>

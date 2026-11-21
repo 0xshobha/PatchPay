@@ -69,7 +69,7 @@ export function DocketActions(props: Props) {
       {pastDeadline && !['paid', 'refunded'].includes(props.status) && (
         <button className="btn !text-[11px]" disabled={busy} onClick={() => call(`/api/bounties/${props.bountyId}/refund`, 'Refunding…')}>Trigger refund</button>
       )}
-      {msg && <p className="mono text-xs w-full">{msg}</p>}
+      {msg && <p className="mono text-xs w-full break-all select-all" role="status">{msg}</p>}
     </div>
   );
 }

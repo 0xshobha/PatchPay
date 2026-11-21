@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import { useApp } from '@/components/Providers';
 import { CopyButton } from '@/components/CopyButton';
+import { Usd } from '@/components/Usd';
 import { fundEscrow } from '@/lib/bch/funding';
 import { EXPLORER_TX } from '@/lib/bch/network';
 
@@ -23,7 +24,7 @@ const bchString = (sats: number) => (sats / 1e8).toFixed(8).replace(/0+$/, '').r
  * extension, desktop): a payment QR / address for the chosen amount, then
  * "I've sent it" reads the chain. WizardConnect wallets get one-click backing.
  */
-export function BackBounty({ bountyId, escrow }: { bountyId: string; escrow: string }) {
+export function BackBounty({ bountyId, escrow, usdPerBch = null }: { bountyId: string; escrow: string; usdPerBch?: number | null }) {
   const { wc, openQr } = useApp();
   const router = useRouter();
   const [amount, setAmount] = useState('0.001');
@@ -99,7 +100,7 @@ export function BackBounty({ bountyId, escrow }: { bountyId: string; escrow: str
   }
 
   return (
-    <div id="back" className="receipt mono text-[13px]">
+    <div id="back" className="receipt mono text-[13px] border-t-4 border-t-bch">
       <p className="label">Back this bounty</p>
       <p className="text-xs mt-1 text-ink-2 leading-snug">
         No sign-in needed. Your BCH joins the escrow: it pays whoever fixes the issue, or returns to the maintainer after the deadline.
@@ -116,6 +117,7 @@ export function BackBounty({ bountyId, escrow }: { bountyId: string; escrow: str
         <span className="label">Custom (BCH)</span>
         <input className="field mt-1" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={!valid} />
       </label>
+      {valid && usdPerBch ? <p className="text-[11px] mt-1"><Usd sats={sats} rate={usdPerBch} /> at today’s mainnet price</p> : null}
       {!valid && amount.trim() !== '' && <p className="text-[11px] text-del mt-1">Min {MIN_SATS / 1e8} BCH, max {MAX_SATS / 1e8} BCH.</p>}
 
       {connected ? (

@@ -33,6 +33,9 @@ const BACKABLE = ['open', 'in_review', 'verified'];
 const bch = (sats: number) => (sats / 1e8).toFixed(sats >= 1e7 ? 3 : 5);
 const docket = (id: string) => 'PP-' + id.slice(0, 4).toUpperCase();
 
+const STEP_TONE = ['border-t-bch text-bch', 'border-t-carbon text-carbon', 'border-t-amber text-amber'];
+const STATUS_TONE: Record<string, string> = { open: 'text-bch', in_review: 'text-carbon', verified: 'text-amber', paid: 'text-bch font-bold', refunded: 'text-ink-2' };
+
 const STEPS: [string, string, string][] = [
   ['01', 'Lock BCH', 'A maintainer funds a one-off escrow contract for one GitHub issue. Anyone can add to it.'],
   ['02', 'Fix & merge', 'Anyone — person or AI agent — opens a PR. CI must be green and an AI review checks the criteria.'],
@@ -59,7 +62,7 @@ export default async function Home() {
         <div>
           <p className="label mb-3">Form PP-1 · Open-source bounty, pre-funded</p>
           <h1 className="text-4xl sm:text-5xl md:text-6xl leading-[1.02] font-medium tracking-tight">
-            Bounties that are <em className="italic">already</em> paid for.
+            Bounties that are <em className="italic mark-bch">already</em> paid for.
           </h1>
           <p className="mt-5 text-lg text-ink-2 max-w-xl">
             A maintainer locks Bitcoin Cash into an escrow contract tied to one GitHub issue. Anyone, person or
@@ -94,8 +97,8 @@ export default async function Home() {
           {STEPS.map(([n, title, text], i) => (
             <li key={n} className="contents">
               {i > 0 && <Arrow />}
-              <div className="flex-1 border-2 border-ink bg-[#f7f4ec] p-4 shadow-[3px_3px_0_var(--color-ink)]">
-                <p className="mono text-xs text-ink-2">{n}</p>
+              <div className={`flex-1 border-2 border-t-[6px] border-ink bg-[#f7f4ec] p-4 shadow-[3px_3px_0_var(--color-ink)] ${STEP_TONE[i].split(' ')[0]}`}>
+                <p className={`mono text-xs font-bold ${STEP_TONE[i].split(' ')[1]}`}>{n}</p>
                 <p className="text-xl font-medium mt-0.5">{title}</p>
                 <p className="text-sm text-ink-2 mt-1">{text}</p>
               </div>
@@ -106,7 +109,7 @@ export default async function Home() {
 
       {tryIt && (
         <section className="mt-10 text-center">
-          <Link href={`/b/${tryIt.id}#back`} className="btn btn-ink inline-block !text-base sm:!text-lg !px-6 !py-4">
+          <Link href={`/b/${tryIt.id}#back`} className="btn btn-bch inline-block !text-base sm:!text-lg !px-6 !py-4">
             Try it: back a live bounty →
           </Link>
           <p className="mono text-xs text-ink-2 mt-3">No sign-in. Any BCH wallet. Your coins pay whoever fixes the issue.</p>
@@ -120,7 +123,7 @@ export default async function Home() {
       <section className="mt-12">
         <div className="flex items-baseline justify-between border-b-2 border-ink pb-1">
           <h2 className="text-2xl font-medium">The ledger</h2>
-          <span className="mono text-xs text-ink-2">{rows.length} entries · {NETWORK}</span>
+          <span className="mono text-xs text-ink-2">{rows.length} {rows.length === 1 ? 'entry' : 'entries'} · {NETWORK}</span>
         </div>
         {rows.length === 0 ? (
           <p className="py-10 mono text-sm text-ink-2">No funded bounties yet. The first entry could be yours.</p>
@@ -142,7 +145,7 @@ export default async function Home() {
                       </td>
                       <td className="py-3 text-right align-top">{bch(sats)}<Usd sats={sats} rate={usd} block /></td>
                       <td className="py-3 text-right pl-3 align-top">{backing.get(r.id)?.count ?? 0}</td>
-                      <td className="py-3 text-right pl-3 uppercase text-xs align-top">{r.status.replace('_', ' ')}</td>
+                      <td className={`py-3 text-right pl-3 uppercase text-xs align-top ${STATUS_TONE[r.status] ?? ''}`}>{r.status.replace('_', ' ')}</td>
                     </tr>
                   );
                 })}

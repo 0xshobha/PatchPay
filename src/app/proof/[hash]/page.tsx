@@ -5,6 +5,8 @@ import { db } from '@/lib/db/supabase';
 import { canonicalJson, proofHash, type PatchProof } from '@/lib/patchproof/proof';
 import { EXPLORER_TX } from '@/lib/bch/network';
 import { VerifyInBrowser } from './VerifyInBrowser';
+import { getUsdPerBch } from '@/lib/price';
+import { Usd } from '@/components/Usd';
 
 export default async function ProofPage({ params }: { params: Promise<{ hash: string }> }) {
   await connection();
@@ -14,21 +16,22 @@ export default async function ProofPage({ params }: { params: Promise<{ hash: st
   const proof = row.proof as PatchProof;
   const { data: pays } = await db().from('payments').select('*').eq('proof_id', row.id);
   const json = canonicalJson(proof);
+  const usd = await getUsdPerBch();
   const serverOk = proofHash(proof) === hash;
 
   return (
     <div className="max-w-3xl mx-auto">
       <div className="receipt relative">
         <p className="label">PatchProof · v{proof.v}</p>
-        <h1 className="text-3xl font-medium mt-1">{proof.bounty.repo}#{proof.bounty.issue} → PR #{proof.patch.pr}</h1>
-        <div className="mono text-[13px] mt-5 grid grid-cols-[10rem_1fr] gap-y-1">
+        <h1 className="text-2xl sm:text-3xl font-medium mt-1 [overflow-wrap:anywhere]">{proof.bounty.repo}#{proof.bounty.issue} → PR #{proof.patch.pr}</h1>
+        <div className="mono text-[13px] mt-5 grid grid-cols-[7.5rem_1fr] sm:grid-cols-[10rem_1fr] gap-x-2 gap-y-1">
           <span>contributor</span><span><Link href={`/u/${proof.contributor.github}`} className="ink-link">@{proof.contributor.github}</Link> ({proof.contributor.kind})</span>
           <span>merged by</span><span>@{proof.patch.mergedBy ?? '—'}</span>
           <span>head sha</span><span className="break-all">{proof.patch.headSha}</span>
           <span>diff sha256</span><span className="break-all">{proof.patch.diffSha256}</span>
           <span>checks</span><span>{proof.checks.map((c) => `${c.name}:${c.conclusion}`).join(', ') || 'none'}</span>
           <span>AI review</span><span>{proof.review.score}/100 · criteria met {String(proof.review.criteriaMet)} · {proof.review.model}</span>
-          <span>amount</span><span>{(Number(proof.bounty.amountSats) / 1e8).toFixed(5)} BCH</span>
+          <span>amount</span><span>{(Number(proof.bounty.amountSats) / 1e8).toFixed(5)} BCH<Usd sats={Number(proof.bounty.amountSats)} rate={usd} /></span>
           <span>payout tx</span><span>{(pays ?? []).filter((p) => p.kind === 'release').map((p) => <a key={p.txid} className="ink-link block" href={EXPLORER_TX(p.txid)}>{p.txid.slice(0, 24)}…</a>)}</span>
         </div>
         <div className="border-t border-dashed rule my-4" />

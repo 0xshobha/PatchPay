@@ -7,6 +7,8 @@ import { getRateCard } from '@/lib/rates';
 import { CategoryStamp } from '@/components/CategoryStamp';
 import { RateCardEditor } from './RateCardEditor';
 import { CopyButton } from '@/components/CopyButton';
+import { getUsdPerBch } from '@/lib/price';
+import { Usd } from '@/components/Usd';
 
 type Bounty = { id: string; issue_number: number; issue_title: string; amount_sats: number; status: string; category?: string | null; created_at: string };
 
@@ -16,9 +18,10 @@ export default async function RepoRateCard({ params }: { params: Promise<{ owner
   await connection();
   const { owner, repo } = await params;
 
-  const [card, { data: bData }] = await Promise.all([
+  const [card, { data: bData }, usd] = await Promise.all([
     getRateCard(owner, repo),
     db().from('bounties').select('*').eq('owner', owner).eq('repo', repo).eq('network', NETWORK).order('created_at', { ascending: false }).limit(100),
+    getUsdPerBch(),
   ]);
   const bounties = (bData as Bounty[] | null) ?? [];
   const ids = bounties.map((b) => b.id);
@@ -46,7 +49,7 @@ export default async function RepoRateCard({ params }: { params: Promise<{ owner
           {CATEGORIES.map((c) => (
             <div key={c} className="flex justify-between gap-3 py-0.5">
               <span>{c}</span>
-              <span><b>{(card[c].sats / 1e8).toString()}</b> <span className="text-ink-2 text-[11px]">{card[c].source === 'default' ? 'default' : ''}</span></span>
+              <span><b>{(card[c].sats / 1e8).toString()}</b><Usd sats={card[c].sats} rate={usd} /> <span className="text-ink-2 text-[11px]">{card[c].source === 'default' ? 'default' : ''}</span></span>
             </div>
           ))}
           <div className="border-t border-dashed rule my-2" />
@@ -56,8 +59,8 @@ export default async function RepoRateCard({ params }: { params: Promise<{ owner
         <div className="receipt mono text-[13px]">
           <div className="flex justify-between"><span>BOUNTIES</span><span className="font-bold">{bounties.length}</span></div>
           <div className="border-t border-dashed rule my-2" />
-          <div className="flex justify-between py-0.5"><span>open (backed)</span><span className="font-bold">{bch(openSats)} BCH</span></div>
-          <div className="flex justify-between py-0.5"><span>paid to contributors</span><span className="font-bold">{bch(paidSats)} BCH</span></div>
+          <div className="flex justify-between py-0.5"><span>open (backed)</span><span className="font-bold">{bch(openSats)} BCH<Usd sats={openSats} rate={usd} /></span></div>
+          <div className="flex justify-between py-0.5"><span>paid to contributors</span><span className="font-bold">{bch(paidSats)} BCH<Usd sats={paidSats} rate={usd} /></span></div>
         </div>
       </div>
 

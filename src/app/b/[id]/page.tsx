@@ -9,8 +9,12 @@ import { CopyButton } from '@/components/CopyButton';
 import { BackBounty } from './BackBounty';
 import { PayoutChecklist } from './PayoutChecklist';
 import { CategoryStamp } from '@/components/CategoryStamp';
+import { Usd } from '@/components/Usd';
+import { getUsdPerBch } from '@/lib/price';
+import { StatusTimeline } from './StatusTimeline';
 
 const BACKABLE = ['open', 'in_review', 'verified'];
+const CLOSED = ['paid', 'refunded', 'cancelled'];
 
 const STAMP: Record<string, { text: string; cls: string }> = {
   awaiting_funds: { text: 'unfunded', cls: 'text-del' },
@@ -26,33 +30,40 @@ const isPast = (unix: number) => unix * 1000 < Date.now();
 export default async function Docket({ params }: { params: Promise<{ id: string }> }) {
   await connection();
   const { id } = await params;
-  const [{ data: b }, { data: proofs }, { data: pays }, { data: events }] = await Promise.all([
+  const [{ data: b }, { data: proofs }, { data: pays }, { data: events }, usd] = await Promise.all([
     db().from('bounties').select('*').eq('id', id).maybeSingle(),
     db().from('proofs').select('*').eq('bounty_id', id).order('created_at', { ascending: false }),
     db().from('payments').select('*').eq('bounty_id', id).order('created_at'),
     db().from('events').select('*').eq('bounty_id', id).order('created_at'),
+    getUsdPerBch(),
   ]);
   if (!b) notFound();
   const stamp = STAMP[b.status] ?? { text: b.status, cls: '' };
   const backers = new Set((pays ?? []).filter((p) => p.kind === 'fund').map((p) => p.txid)).size;
   const deadline = new Date(Number(b.deadline_unix) * 1000);
+  const paid = b.status === 'paid';
+  const proofList = (proofs ?? []) as { proof: { patch: { mergeSha: string | null } } }[];
+  const prOpened = (events ?? []).some((e) => e.action === 'pr.opened') || ['in_review', 'verified', 'paid'].includes(b.status);
+  const merged = proofList.some((p) => Boolean(p.proof?.patch?.mergeSha));
 
   return (
     <div className="grid md:grid-cols-[1.5fr_1fr] gap-10">
-      <div>
+      <div className="relative min-w-0">
+        {paid && <span className="stamp stamp-slam text-bch absolute right-0 top-0 text-3xl sm:text-5xl !border-[5px] pointer-events-none z-10" aria-label="Paid">paid</span>}
         <p className="label">Docket PP-{b.id.slice(0, 4).toUpperCase()} · {b.network}</p>
-        <h1 className="text-3xl sm:text-4xl font-medium mt-1 leading-tight break-words">{b.issue_title} <CategoryStamp category={b.category} /></h1>
+        <h1 className={`text-3xl sm:text-4xl font-medium mt-1 leading-tight break-words ${paid ? 'pr-24 sm:pr-44' : ''}`}>{b.issue_title} <CategoryStamp category={b.category} /></h1>
         <p className="mono text-sm flex flex-wrap gap-x-3">
           <a className="ink-link" href={`https://github.com/${b.owner}/${b.repo}/issues/${b.issue_number}`}>{b.owner}/{b.repo}#{b.issue_number}</a>
           <Link className="ink-link" href={`/r/${b.owner}/${b.repo}`}>rate card</Link>
         </p>
+        <StatusTimeline status={b.status} prOpened={prOpened} merged={merged} hasProof={proofList.length > 0} paid={paid} />
 
         <div className="mt-8">
           <p className="label mb-1">Acceptance criteria</p>
           <pre className="whitespace-pre-wrap font-serif text-lg">{b.criteria}</pre>
         </div>
 
-        <div className="mt-8 receipt mono text-xs">
+        <div className="mt-8 receipt mono text-xs border-l-4 border-l-carbon">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <p className="label">How to claim</p>
             <CopyButton
@@ -69,7 +80,7 @@ export default async function Docket({ params }: { params: Promise<{ id: string 
         {(proofs ?? []).length === 0 && <p className="mono text-sm text-ink-2 py-4">No merged PR yet.</p>}
         {(proofs ?? []).map((p) => (
           <div key={p.id} className="border-b rule py-4 mono text-sm">
-            <div className="flex justify-between">
+            <div className="flex flex-wrap justify-between gap-x-3">
               <span>PR #{p.pr_number} by <Link href={`/u/${p.proof.contributor.github}`} className="ink-link">@{p.proof.contributor.github}</Link> {p.proof.contributor.kind === 'agent' && <span className="text-carbon">[agent]</span>}</span>
               <Link href={`/proof/${p.proof_hash}`} className="ink-link">{p.proof_hash.slice(0, 12)}…</Link>
             </div>
@@ -77,23 +88,23 @@ export default async function Docket({ params }: { params: Promise<{ id: string 
               checks {p.checks_green ? 'green' : 'NOT green'} · AI review {p.proof.review.score}/100 · +{p.proof.patch.additions}/−{p.proof.patch.deletions} · {p.status}
             </div>
             <PayoutChecklist row={p} owner={b.owner} repo={b.repo} pays={pays ?? []} />
-            <DocketActions kind="approve" bountyId={b.id} proofId={p.id} disabled={p.status !== 'pending' || !p.checks_green} paid={p.status === 'paid'} />
+            {!CLOSED.includes(b.status) && p.status === 'pending' && <DocketActions kind="approve" bountyId={b.id} proofId={p.id} disabled={!p.checks_green} paid={false} />}
           </div>
         ))}
       </div>
 
       <aside className="space-y-6">
         <div className="receipt mono text-[13px] relative">
-          <div className="flex justify-between"><span>ESCROW</span><span>{(Number(b.amount_sats) / 1e8).toFixed(5)} BCH</span></div>
+          <div className="flex justify-between"><span>ESCROW</span><span className="text-right">{(Number(b.amount_sats) / 1e8).toFixed(5)} BCH<Usd sats={Number(b.amount_sats)} rate={usd} block /></span></div>
           <div className="border-t border-dashed rule my-2" />
           <p className="break-all text-xs select-all">{b.escrow_address}</p>
-          <EscrowLive bountyId={b.id} escrow={b.escrow_address} amountSats={Number(b.amount_sats)} funded={b.status !== 'awaiting_funds'} backers={backers} />
+          <EscrowLive bountyId={b.id} escrow={b.escrow_address} amountSats={Number(b.amount_sats)} funded={b.status !== 'awaiting_funds'} backers={backers} usdPerBch={usd} closed={CLOSED.includes(b.status) ? b.status : null} />
           <div className="border-t border-dashed rule my-2" />
           <p className="text-xs">refunds to maintainer after {deadline.toISOString().slice(0, 10)}</p>
           <p className="text-xs mt-1 text-ink-2 break-all">oracle {b.oracle_pubkey.slice(0, 18)}…</p>
           <span className={`stamp absolute right-4 -bottom-2 ${stamp.cls}`}>{stamp.text}</span>
         </div>
-        {BACKABLE.includes(b.status) && <BackBounty bountyId={b.id} escrow={b.escrow_address} />}
+        {BACKABLE.includes(b.status) && <BackBounty bountyId={b.id} escrow={b.escrow_address} usdPerBch={usd} />}
         <DocketActions kind="sync" bountyId={b.id} escrow={b.escrow_address} amountSats={Number(b.amount_sats)} status={b.status} pastDeadline={isPast(Number(b.deadline_unix))} />
 
         <div>
@@ -101,7 +112,7 @@ export default async function Docket({ params }: { params: Promise<{ id: string 
           {(pays ?? []).length === 0 && <p className="mono text-xs text-ink-2">None yet.</p>}
           {(pays ?? []).map((t) => (
             <a key={t.id} href={EXPLORER_TX(t.txid)} className="block mono text-xs ink-link">
-              {t.kind === 'fund' ? 'backed' : t.kind}{t.amount_sats ? ` ${(Number(t.amount_sats) / 1e8).toFixed(5)}` : ''} · {t.txid.slice(0, 12)}…
+              {t.kind === 'fund' ? 'backed' : t.kind}{t.amount_sats ? ` ${(Number(t.amount_sats) / 1e8).toFixed(5)}` : ''}{t.amount_sats ? <Usd sats={Number(t.amount_sats)} rate={usd} /> : null} · {t.txid.slice(0, 12)}…
             </a>
           ))}
         </div>
